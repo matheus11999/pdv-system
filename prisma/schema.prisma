@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  role          Role      @default(USER)
+  parentId      String?
+  credits       Int       @default(0)
+  mercadoPagoToken String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  parent        User?     @relation("UserToUser", fields: [parentId], references: [id])
+  children      User[]    @relation("UserToUser")
+  
+  categories    Category[]
+  servers       Server[]
+  sshAccounts   SSHAccount[]
+
+  @@map("users")
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  creator   User     @relation(fields: [createdBy], references: [id])
+  servers   Server[]
+
+  @@map("categories")
+}
+
+model Server {
+  id         String   @id @default(uuid())
+  categoryId String
+  name       String
+  host       String
+  port       Int      @default(22)
+  createdBy  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category    Category    @relation(fields: [categoryId], references: [id])
+  creator     User        @relation(fields: [createdBy], references: [id])
+  sshAccounts SSHAccount[]
+
+  @@map("servers")
+}
+
+model SSHAccount {
+  id             String   @id @default(uuid())
+  serverId       String
+  username       String
+  password       String
+  expirationDate DateTime
+  createdBy      String
+  isTest         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  server   Server @relation(fields: [serverId], references: [id])
+  creator  User   @relation(fields: [createdBy], references: [id])
+
+  @@map("ssh_accounts")
+}
+
+enum Role {
+  ADMIN
+  RESELLER
+  USER
+}
