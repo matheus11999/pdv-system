@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { QrCode, X, Camera, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from './ui/Button';
+import { playSound } from '../utils/sound';
 
 interface BarcodeScannerProps {
   isOpen: boolean;
@@ -112,10 +113,6 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       if (videoRef.current && videoRef.current.readyState > 1) {
         try {
           const barcodes = await barcodeDetector.detect(videoRef.current);
-          import { playSound } from '../utils/sound';
-
-// ... (rest of the component)
-
           if (barcodes.length > 0) {
             playSound('/scan-sound.mp3');
             onScan(barcodes[0].rawValue);
