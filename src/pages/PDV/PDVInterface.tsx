@@ -13,6 +13,7 @@ import { generateReceiptPDF, generateReceiptHTML, openReceiptInNewTab } from '..
 import { useAlert } from '../../components/AlertProvider';
 import { useStoreSettings } from '../../hooks/useStoreSettings';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
+import { playSound } from '../../utils/sound';
 
 interface CartItem {
   id: string;
@@ -267,10 +268,6 @@ export const PDVInterface: React.FC = () => {
           total_price: item.total
         }))
       };
-
-      import { playSound } from '../../utils/sound';
-
-// ... (rest of the component)
 
       const sale = await createSale(saleData);
       setLastSale(sale);
