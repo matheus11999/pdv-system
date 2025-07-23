@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gerador de Ícones PDV</title>
+</head>
+<body>
+    <canvas id="canvas192" width="192" height="192" style="border: 1px solid #ccc; margin: 10px;"></canvas>
+    <canvas id="canvas512" width="512" height="512" style="border: 1px solid #ccc; margin: 10px;"></canvas>
+    <br>
+    <button onclick="generateIcons()">Gerar Ícones</button>
+    <button onclick="downloadIcon(192)">Download 192x192</button>
+    <button onclick="downloadIcon(512)">Download 512x512</button>
+
+    <script>
+        function generateIcons() {
+            // Gerar ícone 192x192
+            const canvas192 = document.getElementById('canvas192');
+            const ctx192 = canvas192.getContext('2d');
+            drawIcon(ctx192, 192);
+            
+            // Gerar ícone 512x512
+            const canvas512 = document.getElementById('canvas512');
+            const ctx512 = canvas512.getContext('2d');
+            drawIcon(ctx512, 512);
+        }
+        
+        function drawIcon(ctx, size) {
+            // Background azul
+            ctx.fillStyle = '#2563eb';
+            ctx.fillRect(0, 0, size, size);
+            
+            // Texto PDV
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${size/6}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('PDV', size/2, size/2 - size/12);
+            
+            // Subtítulo
+            ctx.font = `${size/12}px Arial`;
+            ctx.fillText('SYSTEM', size/2, size/2 + size/12);
+            
+            // Ícone de caixa registradora (simplificado)
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = size/50;
+            const boxSize = size/4;
+            const x = size/2 - boxSize/2;
+            const y = size/1.8;
+            
+            // Retângulo principal
+            ctx.strokeRect(x, y, boxSize, boxSize/2);
+            
+            // Tela
+            ctx.strokeRect(x + boxSize/4, y - boxSize/4, boxSize/2, boxSize/4);
+            
+            // Botões
+            for(let i = 0; i < 3; i++) {
+                for(let j = 0; j < 2; j++) {
+                    const btnX = x + boxSize/4 + i * boxSize/6;
+                    const btnY = y + boxSize/4 + j * boxSize/8;
+                    ctx.fillRect(btnX, btnY, boxSize/12, boxSize/16);
+                }
+            }
+        }
+        
+        function downloadIcon(size) {
+            const canvas = document.getElementById(`canvas${size}`);
+            const link = document.createElement('a');
+            link.download = `icon-${size}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+        
+        // Gerar ícones automaticamente ao carregar
+        window.onload = generateIcons;
+    </script>
+</body>
+</html>

@@ -1,77 +1,74 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Card } from '../components/ui/Card';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const signIn = useAuthStore(state => state.signIn);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
+    
     try {
       await signIn(email, password);
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
-        
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
+      <Card className="w-full max-w-md">
+        <div className="p-6">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">Sistema PDV</h1>
+            <p className="text-gray-600 mt-2">Faça login para acessar o sistema</p>
           </div>
-        )}
+          
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              label="Email"
               type="email"
+              placeholder="Digite seu email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
               required
             />
-          </div>
 
-          <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
+            <Input
+              label="Senha"
               type="password"
+              placeholder="Digite sua senha"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
               required
             />
-          </div>
 
-          <button
-            type="submit"
-            className="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-600 focus:outline-none"
-          >
-            Sign In
-          </button>
-        </form>
-
-        <p className="mt-4 text-center text-sm">
-          Don't have an account?{' '}
-          <Link to="/register" className="text-blue-500 hover:text-blue-600">
-            Register
-          </Link>
-        </p>
-      </div>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading}
+            >
+              {loading ? 'Entrando...' : 'Entrar'}
+            </Button>
+          </form>
+        </div>
+      </Card>
     </div>
   );
 }
