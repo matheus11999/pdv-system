@@ -268,8 +268,13 @@ export const PDVInterface: React.FC = () => {
         }))
       };
 
+      import { playSound } from '../../utils/sound';
+
+// ... (rest of the component)
+
       const sale = await createSale(saleData);
       setLastSale(sale);
+      playSound('/success-sound.mp3');
       
       // Commission handled server-side
       
