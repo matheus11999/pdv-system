@@ -25,6 +25,8 @@ export interface StoreSettings {
   receipt_footer: string;
   currency: string;
   timezone: string;
+  sound_effects_enabled?: boolean;
+  allow_credit_sales?: boolean;
   updated_at: string;
 }
 
@@ -83,7 +85,9 @@ export const useStoreSettings = () => {
         receipt_message: 'Obrigado pela preferência!',
         receipt_footer: 'Volte sempre!',
         currency: 'BRL',
-        timezone: 'America/Sao_Paulo'
+        timezone: 'America/Sao_Paulo',
+        sound_effects_enabled: true,
+        allow_credit_sales: true
       };
 
       const { data, error } = await supabase

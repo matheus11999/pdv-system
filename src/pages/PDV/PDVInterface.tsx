@@ -13,7 +13,8 @@ import { generateReceiptPDF, generateReceiptHTML, openReceiptInNewTab } from '..
 import { useAlert } from '../../components/AlertProvider';
 import { useStoreSettings } from '../../hooks/useStoreSettings';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
-import { playSound } from '../../utils/sound';
+import { playSound, playScanSound, playSuccessSound } from '../../utils/sound';
+
 
 interface CartItem {
   id: string;
@@ -41,6 +42,8 @@ export const PDVInterface: React.FC = () => {
   const [discountPercentage, setDiscountPercentage] = useState(0);
   const [showDiscountInput, setShowDiscountInput] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [showCreditSaleModal, setShowCreditSaleModal] = useState(false);
+  const [creditSaleCustomer, setCreditSaleCustomer] = useState<any>(null);
   
   const { products, loading: productsLoading, searchProducts } = useProducts();
   const { customers, loading: customersLoading, searchCustomers } = useCustomers();
@@ -223,38 +226,19 @@ export const PDVInterface: React.FC = () => {
   const processSale = async () => {
     if (!profile || cart.length === 0) return;
     
-    // Verificar se é venda fiado e se cliente está selecionado
-    if (paymentType === 'CREDIT' && !selectedCustomer) {
-      warning('Para venda fiado é necessário selecionar um cliente.', 'Cliente Obrigatório');
-      return;
-    }
-    
     try {
-      const today = new Date();
-      const dueDate = paymentType === 'CREDIT' ? new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000) : undefined; // 30 dias
-      
-      // Commission calculation handled server-side
-      
       const saleData = {
-        customer_id: selectedCustomer || undefined,
         total_amount: getCartTotal(),
         discount_amount: 0,
         tax_amount: 0,
-        // commission calculated server-side
         payment_method: paymentType,
         payment_details: paymentType === 'CASH' ? { 
           cash_received: cashReceived ? parseFloat(cashReceived) : getCartTotal(),
           change_given: getChangeAmount()
-        } : paymentType === 'CREDIT' ? {
-          credit_sale: true,
-          customer_id: selectedCustomer,
-          due_date: dueDate?.toISOString()
         } : {},
-        notes: paymentType === 'CREDIT' ? 'Venda fiado - criar débito para cliente' : undefined,
         requires_receipt: requiresReceipt,
-        is_credit_sale: paymentType === 'CREDIT',
-        due_date: dueDate?.toISOString().split('T')[0],
-        payment_gateway: 'direct', // TODO: Usar configuração do sistema
+        is_credit_sale: false,
+        payment_gateway: 'direct',
         change_amount: paymentType === 'CASH' ? getChangeAmount() : 0,
         items: cart.map(item => ({
           product_id: item.id,
@@ -271,49 +255,23 @@ export const PDVInterface: React.FC = () => {
 
       const sale = await createSale(saleData);
       setLastSale(sale);
-      playSound('/success-sound.mp3');
-      
-      // Commission handled server-side
-      
-      // If it's a credit sale, update customer debt
-      if (paymentType === 'CREDIT' && selectedCustomer) {
-        const customer = customers.find(c => c.id === selectedCustomer);
-        const currentDebt = customer?.debt_balance || 0;
-        const newDebt = currentDebt + getCartTotal();
-        
-        await supabase
-          .from('customers')
-          .update({ debt_balance: newDebt })
-          .eq('id', selectedCustomer);
-      }
+      playSuccessSound();
       
       // Perguntar sobre comprovante
       setShowPaymentModal(false);
       if (requiresReceipt) {
         setShowReceiptModal(true);
       } else {
-        // Notificação de sucesso melhorada
-        const selectedCustomerData = selectedCustomer ? customers.find(c => c.id === selectedCustomer) : null;
-        const currentDebt = selectedCustomerData?.debt_balance || 0;
-        const newTotalDebt = paymentType === 'CREDIT' ? currentDebt + getCartTotal() : currentDebt;
+        // Notificação de sucesso
+        const paymentLabel = paymentType === 'CASH' ? 'Dinheiro' : paymentType === 'PIX' ? 'PIX' : 'Cartão';
+        const details = paymentType === 'CASH' && cashReceived ? 
+          `\nRecebido: R$ ${parseFloat(cashReceived).toFixed(2)}\nTroco: R$ ${getChangeAmount().toFixed(2)}` : '';
         
-        if (paymentType === 'CREDIT') {
-          success(
-            `Valor da compra: R$ ${getCartTotal().toFixed(2)}\nCliente: ${selectedCustomerData?.name || 'N/A'}\nVencimento: 30 dias\n\nSaldo Devedor: R$ ${newTotalDebt.toFixed(2)}`,
-            '✅ Venda Fiado Realizada!',
-            6000
-          );
-        } else {
-          const paymentLabel = paymentType === 'CASH' ? 'Dinheiro' : paymentType === 'PIX' ? 'PIX' : 'Cartão';
-          const details = paymentType === 'CASH' && cashReceived ? 
-            `\nRecebido: R$ ${parseFloat(cashReceived).toFixed(2)}\nTroco: R$ ${getChangeAmount().toFixed(2)}` : '';
-          
-          success(
-            `Valor: R$ ${getCartTotal().toFixed(2)}\nPagamento: ${paymentLabel}${details}`,
-            '✅ Venda Realizada!',
-            5000
-          );
-        }
+        success(
+          `Valor: R$ ${getCartTotal().toFixed(2)}\nPagamento: ${paymentLabel}${details}`,
+          '✅ Venda Realizada!',
+          5000
+        );
         
         clearCart();
       }
@@ -323,6 +281,80 @@ export const PDVInterface: React.FC = () => {
       error(
         err instanceof Error ? err.message : 'Erro desconhecido ao processar venda',
         'Erro na Venda'
+      );
+    }
+  };
+
+  const processCreditSale = async () => {
+    if (!profile || cart.length === 0 || !creditSaleCustomer) return;
+    
+    try {
+      const today = new Date();
+      const dueDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 dias
+      
+      const saleData = {
+        customer_id: creditSaleCustomer.id,
+        total_amount: getCartTotal(),
+        discount_amount: 0,
+        tax_amount: 0,
+        payment_method: 'CREDIT',
+        payment_details: {
+          credit_sale: true,
+          customer_id: creditSaleCustomer.id,
+          due_date: dueDate.toISOString()
+        },
+        notes: 'Venda fiado - criar débito para cliente',
+        requires_receipt: requiresReceipt,
+        is_credit_sale: true,
+        due_date: dueDate.toISOString().split('T')[0],
+        payment_gateway: 'direct',
+        change_amount: 0,
+        items: cart.map(item => ({
+          product_id: item.id,
+          product_name: item.name,
+          product_barcode: undefined,
+          quantity: item.quantity,
+          unit_price: item.price,
+          unit_cost: item.cost_price,
+          discount_amount: 0,
+          tax_amount: 0,
+          total_price: item.total
+        }))
+      };
+
+      const sale = await createSale(saleData);
+      setLastSale(sale);
+      playSuccessSound();
+      
+      // Update customer debt
+      const currentDebt = creditSaleCustomer.debt_balance || 0;
+      const newDebt = currentDebt + getCartTotal();
+      
+      await supabase
+        .from('customers')
+        .update({ debt_balance: newDebt })
+        .eq('id', creditSaleCustomer.id);
+      
+      // Close modal and show success
+      setShowCreditSaleModal(false);
+      setCreditSaleCustomer(null);
+      
+      if (requiresReceipt) {
+        setShowReceiptModal(true);
+      } else {
+        success(
+          `Valor da compra: R$ ${getCartTotal().toFixed(2)}\nCliente: ${creditSaleCustomer.name}\nVencimento: 30 dias\n\nNovo Saldo Devedor: R$ ${newDebt.toFixed(2)}`,
+          '✅ Venda Fiado Realizada!',
+          6000
+        );
+        clearCart();
+      }
+      
+    } catch (err) {
+      console.error('Erro ao processar venda fiado:', err);
+      error(
+        err instanceof Error ? err.message : 'Erro desconhecido ao processar venda fiado',
+        'Erro na Venda Fiado'
       );
     }
   };
@@ -375,6 +407,8 @@ export const PDVInterface: React.FC = () => {
     setLastSale(null);
     setDiscountPercentage(0);
     setShowDiscountInput(false);
+    setCreditSaleCustomer(null);
+    setShowCreditSaleModal(false);
   };
 
   const startScanner = async () => {
@@ -395,6 +429,9 @@ export const PDVInterface: React.FC = () => {
   const handleScanResult = (result: string) => {
     setShowScanner(false);
     setSearchTerm(result);
+    
+    // Reproduzir som de escaneamento
+    playScanSound();
     
     // Buscar produto automaticamente
     if (result.trim()) {
@@ -616,183 +653,6 @@ export const PDVInterface: React.FC = () => {
       <div className="hidden lg:flex lg:w-96 bg-white shadow-lg border-l flex-col">
         <div className="p-4 sm:p-6 border-b">
           <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4">Carrinho de Compras</h3>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                🔍 Cliente (opcional para venda fiado)
-              </label>
-              <div className="space-y-2">
-                <Input
-                  placeholder="Digite o nome, telefone ou documento do cliente..."
-                  value={customerSearchTerm}
-                  onChange={(e) => {
-                    setCustomerSearchTerm(e.target.value);
-                    // Auto-select first matching customer if exact match
-                    if (e.target.value.trim()) {
-                      const exactMatch = filteredCustomers.find(c => 
-                        c.name.toLowerCase() === e.target.value.toLowerCase() ||
-                        c.phone === e.target.value ||
-                        c.cpf === e.target.value ||
-                        c.cnpj === e.target.value
-                      );
-                      if (exactMatch) {
-                        setSelectedCustomer(exactMatch.id);
-                      } else if (filteredCustomers.length === 1) {
-                        setSelectedCustomer(filteredCustomers[0].id);
-                      } else {
-                        setSelectedCustomer(null);
-                      }
-                    } else {
-                      setSelectedCustomer(null);
-                    }
-                  }}
-                  className="text-base h-12"
-                />
-                
-                {/* Show matching customers as larger clickable cards - only when no customer is selected */}
-                {customerSearchTerm && !selectedCustomer && filteredCustomers.length > 0 && (
-                  <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white shadow-lg">
-                    {filteredCustomers.slice(0, 5).map(customer => {
-                      const customerAddress = [
-                        customer.street,
-                        customer.number,
-                        customer.neighborhood,
-                        customer.city
-                      ].filter(Boolean).join(', ');
-                      
-                      return (
-                        <button
-                          key={customer.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedCustomer(customer.id);
-                            setCustomerSearchTerm(customer.name);
-                          }}
-                          className="w-full text-left p-4 hover:bg-blue-50 transition-colors border-b last:border-b-0 border-gray-100"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="font-semibold text-gray-900 text-base mb-1">
-                                {customer.name}
-                              </div>
-                              
-                              {/* Address */}
-                              {customerAddress && (
-                                <div className="text-sm text-gray-600 mb-1">
-                                  📍 {customerAddress}
-                                </div>
-                              )}
-                              
-                              {/* Contact Info */}
-                              <div className="flex items-center gap-3 text-sm text-gray-500">
-                                {customer.phone && (
-                                  <span>📞 {customer.phone}</span>
-                                )}
-                                {customer.cpf && (
-                                  <span>CPF: {customer.cpf}</span>
-                                )}
-                                {customer.cnpj && (
-                                  <span>CNPJ: {customer.cnpj}</span>
-                                )}
-                              </div>
-                            </div>
-                            
-                            {/* Debt info */}
-                            {customer.debt_balance > 0 && (
-                              <div className="ml-3 text-right">
-                                <div className="text-xs text-orange-600 font-medium mb-1">Deve:</div>
-                                <div className="text-base font-bold text-red-600">
-                                  R$ {customer.debt_balance.toFixed(2)}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {customer.debt_balance === 0 && (
-                              <div className="ml-3 text-right">
-                                <div className="text-xs text-green-600 font-medium">
-                                  ✓ Em dia
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                    
-                    {filteredCustomers.length > 5 && (
-                      <div className="p-3 text-center text-sm text-gray-500 bg-gray-50">
-                        E mais {filteredCustomers.length - 5} cliente(s)... Continue digitando para refinar
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                {/* Selected customer info - clean single display */}
-                {selectedCustomer && (() => {
-                  const customer = customers.find(c => c.id === selectedCustomer);
-                  if (!customer) return null;
-                  
-                  return (
-                    <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg shadow-sm">
-                      {/* Main customer info */}
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center mb-1">
-                            <h4 className="font-semibold text-blue-900 text-base mr-2">
-                              {customer.name}
-                            </h4>
-                            {customer.loyalty_points > 0 && (
-                              <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                                🏆 {customer.loyalty_points} pts
-                              </span>
-                            )}
-                          </div>
-                          
-                          {/* Contact info */}
-                          <div className="text-sm text-blue-700 space-y-1">
-                            {customer.phone && (
-                              <div>📞 {customer.phone}</div>
-                            )}
-                            {customer.cpf && (
-                              <div>CPF: {customer.cpf}</div>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* Debt status */}
-                        <div className="text-right">
-                          {customer.debt_balance > 0 ? (
-                            <div>
-                              <div className="text-xs text-orange-600 font-medium">Deve:</div>
-                              <div className="text-lg font-bold text-red-600">
-                                R$ {customer.debt_balance.toFixed(2)}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                              ✓ Em dia
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Action button */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCustomer(null);
-                          setCustomerSearchTerm('');
-                        }}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline"
-                      >
-                        ✕ Remover cliente
-                      </button>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-3 sm:p-4">
@@ -1087,70 +947,6 @@ export const PDVInterface: React.FC = () => {
                 </div>
               </div>
               
-              {/* Customer Selection */}
-              <div className="mb-4 sm:mb-6">
-                <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  <User className="w-4 h-4 inline mr-2" />
-                  Cliente (opcional)
-                </label>
-                
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Buscar cliente por nome, telefone ou documento..."
-                    value={customerSearchTerm}
-                    onChange={(e) => {
-                      setCustomerSearchTerm(e.target.value);
-                      searchCustomers(e.target.value);
-                    }}
-                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm sm:text-base"
-                  />
-                  
-                  {customerSearchTerm && filteredCustomers.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg z-10 max-h-40 overflow-y-auto mt-1">
-                      {filteredCustomers.slice(0, 5).map((customer) => (
-                        <button
-                          key={customer.id}
-                          onClick={() => {
-                            setSelectedCustomer(customer.id);
-                            setCustomerSearchTerm('');
-                          }}
-                          className="w-full text-left p-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
-                        >
-                          <div className="font-medium text-gray-900 text-sm">{customer.name}</div>
-                          <div className="text-xs text-gray-500">
-                            {customer.phone && `Tel: ${customer.phone}`}
-                            {customer.document && ` • Doc: ${customer.document}`}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                {selectedCustomer && (
-                  <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <User className="w-4 h-4 text-emerald-600 mr-2" />
-                        <div>
-                          <p className="font-semibold text-emerald-800 text-sm">{customers.find(c => c.id === selectedCustomer)?.name}</p>
-                          <p className="text-emerald-600 text-xs">Cliente selecionado</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setSelectedCustomer(null);
-                          setCustomerSearchTerm('');
-                        }}
-                        className="text-emerald-600 hover:text-emerald-800 p-1"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
               
               <div className="space-y-4">
                 <div>
@@ -1228,28 +1024,22 @@ export const PDVInterface: React.FC = () => {
                     </button>
                   </div>
                   
-                  {/* Credit/Fiado Button - only show when customer is selected */}
-                  {selectedCustomer && (
+                  {/* Vender Fiado Button - apenas se habilitado nas configurações */}
+                  {storeSettings?.allow_credit_sales && (
                     <div className="mt-4">
                       <button
                         type="button"
-                        onClick={() => setPaymentType('CREDIT')}
-                        className={`relative w-full p-4 rounded-xl border-2 transition-all duration-200 transform hover:scale-105 ${
-                          paymentType === 'CREDIT' 
-                            ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white border-orange-400 shadow-lg' 
-                            : 'bg-gradient-to-br from-orange-50 to-orange-100 text-orange-700 hover:from-orange-100 hover:to-orange-200 border-orange-200 hover:border-orange-300 shadow-sm hover:shadow-md'
-                        }`}
+                        onClick={() => {
+                          setShowPaymentModal(false);
+                          setShowCreditSaleModal(true);
+                        }}
+                        className="relative w-full p-4 rounded-xl border-2 transition-all duration-200 transform hover:scale-105 bg-gradient-to-br from-orange-50 to-orange-100 text-orange-700 hover:from-orange-100 hover:to-orange-200 border-orange-200 hover:border-orange-300 shadow-sm hover:shadow-md"
                       >
                         <div className="flex items-center justify-center space-x-2">
                           <User className="w-6 h-6" />
                           <span className="text-xl">🏪</span>
-                          <span className="font-bold text-lg">Venda Fiado</span>
+                          <span className="font-bold text-lg">Vender Fiado</span>
                         </div>
-                        {paymentType === 'CREDIT' && (
-                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center">
-                            <span className="text-xs">✓</span>
-                          </div>
-                        )}
                       </button>
                     </div>
                   )}
@@ -1281,27 +1071,11 @@ export const PDVInterface: React.FC = () => {
                   </div>
                 )}
                 
-                {paymentType === 'CREDIT' && selectedCustomer && (
-                  <div className="p-3 bg-orange-50 border border-orange-200 rounded">
-                    <div className="flex items-center">
-                      <User className="w-5 h-5 text-orange-600 mr-2" />
-                      <div>
-                        <p className="text-sm font-medium text-orange-800">Venda Fiado</p>
-                        <p className="text-xs text-orange-600">
-                          O valor será adicionado ao débito do cliente
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
                 
                 <div className="flex space-x-4 pt-6">
                   <button
                     onClick={processSale}
-                    disabled={
-                      salesLoading || 
-                      (paymentType === 'CREDIT' && !selectedCustomer)
-                    }
+                    disabled={salesLoading}
                     className="flex-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:from-emerald-600 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 transition-all duration-200 flex items-center justify-center"
                   >
                     <Download className="w-5 h-5 mr-2" />
@@ -1440,6 +1214,242 @@ export const PDVInterface: React.FC = () => {
                   </Button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Credit Sale Modal */}
+      {showCreditSaleModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-orange-600 to-orange-700 p-6 text-white rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold">Venda Fiado</h3>
+                  <p className="text-orange-100">Selecione o cliente</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowCreditSaleModal(false);
+                    setCreditSaleCustomer(null);
+                    setCustomerSearchTerm('');
+                  }}
+                  className="text-white hover:bg-orange-700 p-2 rounded-full transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {!creditSaleCustomer ? (
+                <>
+                  {/* Customer Search */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                      <User className="w-4 h-4 inline mr-2" />
+                      Buscar Cliente
+                    </label>
+                    
+                    <Input
+                      placeholder="Digite o nome, telefone ou documento do cliente..."
+                      value={customerSearchTerm}
+                      onChange={(e) => {
+                        setCustomerSearchTerm(e.target.value);
+                        if (e.target.value.trim()) {
+                          searchCustomers(e.target.value);
+                        }
+                      }}
+                      className="text-base h-12"
+                    />
+                  </div>
+
+                  {/* Customer Results */}
+                  {customerSearchTerm && filteredCustomers.length > 0 && (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {filteredCustomers.slice(0, 5).map(customer => (
+                        <div
+                          key={customer.id}
+                          onClick={() => {
+                            setCreditSaleCustomer(customer);
+                            setCustomerSearchTerm('');
+                          }}
+                          className="p-4 bg-gray-50 hover:bg-orange-50 rounded-lg cursor-pointer transition-colors border border-gray-200 hover:border-orange-300"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="font-semibold text-gray-900 mb-1">
+                                {customer.name}
+                              </div>
+                              
+                              <div className="text-sm text-gray-600 space-y-1">
+                                {customer.phone && (
+                                  <div>📞 {customer.phone}</div>
+                                )}
+                                {customer.cpf && (
+                                  <div>CPF: {customer.cpf}</div>
+                                )}
+                                {customer.cnpj && (
+                                  <div>CNPJ: {customer.cnpj}</div>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="text-right ml-3">
+                              {customer.debt_balance > 0 ? (
+                                <div>
+                                  <div className="text-xs text-orange-600 font-medium">Deve:</div>
+                                  <div className="text-sm font-bold text-red-600">
+                                    R$ {customer.debt_balance.toFixed(2)}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                                  ✓ Em dia
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {customerSearchTerm && filteredCustomers.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <User className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                      <p>Nenhum cliente encontrado</p>
+                      <p className="text-sm">Tente buscar por nome, telefone ou documento</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Selected Customer Details */}
+                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-bold text-orange-900 text-lg">Cliente Selecionado</h4>
+                      <button
+                        onClick={() => {
+                          setCreditSaleCustomer(null);
+                          setCustomerSearchTerm('');
+                        }}
+                        className="text-orange-600 hover:text-orange-800 p-1"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Customer Info */}
+                    <div className="space-y-3">
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Nome:</span>
+                        <p className="font-semibold text-gray-900">{creditSaleCustomer.name}</p>
+                      </div>
+
+                      {creditSaleCustomer.cpf && (
+                        <div>
+                          <span className="text-sm font-medium text-gray-600">CPF:</span>
+                          <p className="text-gray-900">{creditSaleCustomer.cpf}</p>
+                        </div>
+                      )}
+
+                      {creditSaleCustomer.phone && (
+                        <div>
+                          <span className="text-sm font-medium text-gray-600">Telefone:</span>
+                          <p className="text-gray-900">{creditSaleCustomer.phone}</p>
+                        </div>
+                      )}
+
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Saldo Devedor Atual:</span>
+                        <p className={`font-bold ${creditSaleCustomer.debt_balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          R$ {(creditSaleCustomer.debt_balance || 0).toFixed(2)}
+                        </p>
+                      </div>
+
+                      {creditSaleCustomer.last_payment_date && (
+                        <div>
+                          <span className="text-sm font-medium text-gray-600">Último Pagamento:</span>
+                          <p className="text-gray-900">
+                            {new Date(creditSaleCustomer.last_payment_date).toLocaleDateString('pt-BR')}
+                          </p>
+                        </div>
+                      )}
+
+                      {creditSaleCustomer.loyalty_points > 0 && (
+                        <div>
+                          <span className="text-sm font-medium text-gray-600">Pontos de Fidelidade:</span>
+                          <p className="text-gray-900 flex items-center">
+                            🏆 {creditSaleCustomer.loyalty_points} pontos
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Address */}
+                      {(creditSaleCustomer.street || creditSaleCustomer.city) && (
+                        <div>
+                          <span className="text-sm font-medium text-gray-600">Endereço:</span>
+                          <p className="text-gray-900">
+                            {[
+                              creditSaleCustomer.street,
+                              creditSaleCustomer.number,
+                              creditSaleCustomer.neighborhood,
+                              creditSaleCustomer.city,
+                              creditSaleCustomer.state
+                            ].filter(Boolean).join(', ')}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Sale Summary */}
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
+                    <h4 className="font-semibold text-gray-900 mb-3">Resumo da Venda</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span>Valor da compra:</span>
+                        <span className="font-bold">R$ {getCartTotal().toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Saldo atual:</span>
+                        <span>R$ {(creditSaleCustomer.debt_balance || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="border-t pt-2 flex justify-between">
+                        <span className="font-semibold">Novo saldo devedor:</span>
+                        <span className="font-bold text-red-600">
+                          R$ {((creditSaleCustomer.debt_balance || 0) + getCartTotal()).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        Vencimento: 30 dias ({new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')})
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Confirm Button */}
+                  <Button
+                    onClick={processCreditSale}
+                    disabled={salesLoading}
+                    className="w-full bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white font-bold py-4 text-lg shadow-lg"
+                  >
+                    {salesLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        Processando...
+                      </>
+                    ) : (
+                      <>
+                        <User className="w-5 h-5 mr-2" />
+                        Confirmar Venda Fiado
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

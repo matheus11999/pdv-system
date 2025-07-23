@@ -39,7 +39,6 @@ interface ReceiptData {
   items: ReceiptItem[];
   created_at: string;
   is_credit_sale?: boolean;
-  due_date?: string;
   company: CompanyInfo;
 }
 
@@ -200,11 +199,6 @@ export const generateReceiptPDF = (receiptData: ReceiptData): void => {
     yPosition += 2;
     
     pdf.setFont(undefined, 'normal');
-    if (receiptData.due_date) {
-      const dueDate = new Date(receiptData.due_date);
-      yPosition = addCenteredText(`Vencimento: ${dueDate.toLocaleDateString('pt-BR')}`, yPosition, 8);
-      yPosition += 2;
-    }
     
     // Saldo devedor
     if (receiptData.customer.new_debt !== undefined) {
@@ -255,63 +249,104 @@ export const generateReceiptHTML = (receiptData: ReceiptData): string => {
             .receipt { box-shadow: none; border: none; }
         }
         body {
-            font-family: 'Courier New', monospace;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 20px;
-            background-color: #f5f5f5;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
         }
         .receipt {
-            width: 350px;
+            width: 380px;
             margin: 0 auto;
             background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            font-size: 12px;
-            line-height: 1.4;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            font-size: 13px;
+            line-height: 1.5;
+            position: relative;
+            overflow: hidden;
+        }
+        .receipt::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #4CAF50, #2196F3, #FF9800);
         }
         .header {
             text-align: center;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #000;
-            padding-bottom: 15px;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 20px;
+            position: relative;
+        }
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 2px;
+            background: linear-gradient(90deg, #4CAF50, #2196F3);
         }
         .company-name {
-            font-size: 18px;
-            font-weight: bold;
-            margin: 0 0 5px 0;
+            font-size: 22px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            color: #2c3e50;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
         .company-info {
-            font-size: 10px;
-            margin: 2px 0;
-            color: #666;
+            font-size: 11px;
+            margin: 3px 0;
+            color: #546e7a;
+            font-weight: 500;
         }
         .sale-info {
             text-align: center;
-            margin-bottom: 15px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
         }
         .sale-number {
-            font-size: 16px;
-            font-weight: bold;
-            margin: 0 0 8px 0;
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0 0 10px 0;
+            color: #2c3e50;
         }
         .items-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
         .items-table th {
-            background-color: #e9ecef;
-            padding: 5px 3px;
-            font-size: 10px;
-            border-bottom: 1px solid #000;
+            background: linear-gradient(135deg, #37474f 0%, #546e7a 100%);
+            color: white;
+            padding: 12px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         .items-table td {
-            padding: 3px;
-            font-size: 10px;
-            border-bottom: 1px dotted #ccc;
+            padding: 10px 8px;
+            font-size: 11px;
+            border-bottom: 1px solid #f0f0f0;
+            background-color: #fff;
+        }
+        .items-table tr:nth-child(even) td {
+            background-color: #fafafa;
+        }
+        .items-table tr:hover td {
+            background-color: #f5f5f5;
         }
         .item-name {
             max-width: 150px;
@@ -321,21 +356,40 @@ export const generateReceiptHTML = (receiptData: ReceiptData): string => {
         .text-right { text-align: right; }
         .text-left { text-align: left; }
         .total-section {
-            border-top: 2px solid #000;
-            padding-top: 10px;
+            border-top: 3px solid #e9ecef;
+            padding-top: 20px;
             text-align: center;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        .total-section::before {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 3px;
+            background: linear-gradient(90deg, #4CAF50, #2196F3);
         }
         .total-amount {
-            font-size: 18px;
-            font-weight: bold;
-            margin: 10px 0;
+            font-size: 24px;
+            font-weight: 800;
+            margin: 15px 0;
+            color: #2e7d32;
+            text-shadow: 0 2px 4px rgba(46, 125, 50, 0.2);
+            padding: 10px;
+            background: linear-gradient(135deg, #e8f5e8 0%, #f1f8e9 100%);
+            border-radius: 8px;
+            border: 2px solid #a5d6a7;
         }
         .payment-info {
-            background-color: #f8f9fa;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 15px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196F3;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
         }
         .credit-sale {
             border: 2px solid #dc3545;
@@ -359,18 +413,25 @@ export const generateReceiptHTML = (receiptData: ReceiptData): string => {
             color: #666;
         }
         .print-button {
-            background-color: #28a745;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
+            padding: 15px 30px;
+            border-radius: 25px;
             cursor: pointer;
-            font-size: 14px;
-            margin: 20px auto;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 30px auto;
             display: block;
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
         .print-button:hover {
-            background-color: #218838;
+            background: linear-gradient(135deg, #218838 0%, #1ea085 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
         }
     </style>
 </head>
@@ -430,19 +491,17 @@ export const generateReceiptHTML = (receiptData: ReceiptData): string => {
 
         <div class="payment-info">
             <p style="margin: 5px 0; font-weight: bold;">Forma de Pagamento: ${paymentLabel}</p>
-            ${receiptData.payment_method === 'CASH' && receiptData.cash_received ? 
+            ${receiptData.payment_method === 'CASH' && receiptData.cash_received && !receiptData.is_credit_sale ? 
                 `<p style="margin: 5px 0;">Valor Recebido: R$ ${receiptData.cash_received.toFixed(2)}</p>` : ''}
-            ${receiptData.payment_method === 'CASH' && receiptData.change_amount && receiptData.change_amount > 0 ? 
+            ${receiptData.payment_method === 'CASH' && receiptData.change_amount && receiptData.change_amount > 0 && !receiptData.is_credit_sale ? 
                 `<p style="margin: 5px 0; font-weight: bold;">Troco: R$ ${receiptData.change_amount.toFixed(2)}</p>` : ''}
         </div>
 
         ${receiptData.is_credit_sale ? `
             <div class="credit-sale">
                 <div class="credit-sale-title">*** VENDA FIADO ***</div>
-                ${receiptData.due_date ? 
-                    `<p style="margin: 5px 0;">Vencimento: ${new Date(receiptData.due_date).toLocaleDateString('pt-BR')}</p>` : ''}
                 ${receiptData.customer.new_debt !== undefined ? 
-                    `<p style="margin: 5px 0; font-weight: bold;">Saldo Devedor: R$ ${receiptData.customer.new_debt.toFixed(2)}</p>` : ''}
+                    `<p style="margin: 5px 0; font-weight: bold;">Novo Saldo Devedor: R$ ${receiptData.customer.new_debt.toFixed(2)}</p>` : ''}
             </div>
         ` : ''}
 

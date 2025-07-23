@@ -20,7 +20,8 @@ import {
   TrendingUp,
   Award,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  Eye
 } from 'lucide-react';
 
 // Lazy load components
@@ -52,7 +53,7 @@ function Sidebar({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onTo
     ...(canUsePOS ? [{
       path: '/dashboard/pdv',
       icon: Calculator,
-      label: '🚀 ABRIR PDV',
+      label: 'ABRIR PDV',
       highlight: true,
       priority: 1
     }] : []),
@@ -145,34 +146,61 @@ function Sidebar({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onTo
   const sortedMenuItems = menuItems.sort((a, b) => (a.priority || 999) - (b.priority || 999));
 
   return (
-    <div className={`${isCollapsed ? 'w-0 lg:w-16' : 'w-64'} bg-white h-full shadow-lg transition-all duration-300 ease-in-out ${isCollapsed ? 'overflow-hidden' : 'lg:relative fixed inset-y-0 left-0 z-50 lg:z-auto'}`}>
+    <div className={`${isCollapsed ? 'w-0 lg:w-16' : 'w-64'} bg-gradient-to-b from-white via-slate-50 to-white h-full shadow-xl border-r border-gray-200 transition-all duration-300 ease-in-out ${isCollapsed ? 'overflow-hidden' : 'lg:relative fixed inset-y-0 left-0 z-50 lg:z-auto'}`}>
       {/* Header */}
-      <div className="p-4 border-b">
+      <div className="p-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50">
         <div className={`${isCollapsed ? 'hidden' : 'block'}`}>
-          <h2 className="text-xl font-semibold text-blue-600">Sistema PDV</h2>
-          <p className="text-sm text-gray-600">{profile?.name || 'Usuário'}</p>
-          <p className="text-xs text-gray-500">{userRole}</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                Sistema PDV
+              </h2>
+              <p className="text-sm font-medium text-slate-700">{profile?.name || 'Usuário'}</p>
+              <p className="text-xs text-slate-500">{userRole}</p>
+            </div>
+            <button
+              onClick={onToggleCollapse}
+              className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg hover:bg-white/70 transition-all duration-200 hover:shadow-md"
+              title="Ocultar sidebar"
+            >
+              <Menu className="w-4 h-4 text-slate-600" />
+            </button>
+          </div>
         </div>
+        {isCollapsed && (
+          <div className="hidden lg:flex justify-center">
+            <button
+              onClick={onToggleCollapse}
+              className="w-8 h-8 rounded-lg hover:bg-white/70 transition-all duration-200 flex items-center justify-center hover:shadow-md"
+              title="Expandir sidebar"
+            >
+              <Menu className="w-4 h-4 text-slate-600" />
+            </button>
+          </div>
+        )}
       </div>
       
       {/* Navigation */}
-      <nav className={`p-2 space-y-1 ${isCollapsed ? 'hidden lg:block' : 'block'}`}>
+      <nav className={`p-3 space-y-2 ${isCollapsed ? 'hidden lg:block' : 'block'}`}>
         {sortedMenuItems.map((item) => {
           const Icon = item.icon;
           return (
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center ${isCollapsed ? 'justify-center' : ''} p-3 rounded-md transition-all duration-200 group ${
+              className={`flex items-center ${isCollapsed ? 'justify-center' : ''} p-3 rounded-xl transition-all duration-200 group relative overflow-hidden ${
                 item.highlight 
-                  ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 shadow-lg' 
-                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700 shadow-lg hover:shadow-xl transform hover:scale-105' 
+                  : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:shadow-md'
               }`}
               title={isCollapsed ? item.label : ''}
             >
-              <Icon className={`w-5 h-5 ${isCollapsed ? '' : 'mr-3'} ${item.highlight ? 'animate-pulse' : ''}`} />
+              {item.highlight && (
+                <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+              )}
+              <Icon className={`w-5 h-5 ${isCollapsed ? '' : 'mr-3'} relative z-10 ${item.highlight ? '' : 'group-hover:scale-110 transition-transform duration-200'}`} />
               {!isCollapsed && (
-                <span className={`font-medium ${item.highlight ? 'text-white' : ''}`}>
+                <span className={`font-semibold relative z-10 ${item.highlight ? 'text-white' : ''}`}>
                   {item.label}
                 </span>
               )}
@@ -244,6 +272,34 @@ function DashboardHome() {
   const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<LowStockProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedSale, setSelectedSale] = useState<any>(null);
+  const [showSaleDetails, setShowSaleDetails] = useState(false);
+
+  const fetchSaleDetails = async (saleNumber: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('sales')
+        .select(`
+          *,
+          customer:customers(name, cpf, cnpj),
+          sale_items(
+            id,
+            product_name,
+            quantity,
+            unit_price,
+            total_price
+          )
+        `)
+        .eq('sale_number', saleNumber)
+        .single();
+
+      if (error) throw error;
+      setSelectedSale(data);
+      setShowSaleDetails(true);
+    } catch (error) {
+      console.error('Erro ao buscar detalhes da venda:', error);
+    }
+  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -627,16 +683,31 @@ function DashboardHome() {
                     )}
                   </div>
                   
-                  <div className="text-right">
-                    <p className="font-bold text-lg text-green-600">
+                  <div className="text-right flex flex-col items-end">
+                    <p className="font-bold text-lg text-green-600 mb-1">
                       {formatCurrency(parseFloat(sale.total_amount))}
                     </p>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 mb-2">
                       {new Date(sale.sale_date).toLocaleTimeString('pt-BR', { 
                         hour: '2-digit', 
                         minute: '2-digit' 
                       })}
                     </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fetchSaleDetails(sale.sale_number);
+                      }}
+                      className="flex items-center px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-full transition-colors"
+                    >
+                      <Eye className="w-3 h-3 mr-1" />
+                      Ver itens
+                    </button>
+                    {sale.payment_method === 'CASH' && sale.change_amount > 0 && (
+                      <div className="text-xs text-orange-600 mt-1">
+                        Troco: {formatCurrency(parseFloat(sale.change_amount))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
@@ -770,6 +841,118 @@ function DashboardHome() {
           )}
         </div>
       </div>
+
+      {/* Modal de detalhes da venda */}
+      {showSaleDetails && selectedSale && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold">Detalhes da Venda</h3>
+                  <p className="text-blue-100">#{selectedSale.sale_number}</p>
+                </div>
+                <button
+                  onClick={() => setShowSaleDetails(false)}
+                  className="text-white hover:bg-blue-700 p-2 rounded-full transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {/* Informações da venda */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-2">Informações Gerais</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Data:</span>
+                      <span>{new Date(selectedSale.created_at).toLocaleString('pt-BR')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Método de Pagamento:</span>
+                      <span className="font-medium">
+                        {selectedSale.payment_method === 'CASH' ? 'Dinheiro' :
+                         selectedSale.payment_method === 'CREDIT_CARD' ? 'Cartão de Crédito' :
+                         selectedSale.payment_method === 'DEBIT_CARD' ? 'Cartão de Débito' :
+                         selectedSale.payment_method === 'PIX' ? 'PIX' :
+                         selectedSale.payment_method === 'CREDIT' ? 'Fiado' : selectedSale.payment_method}
+                      </span>
+                    </div>
+                    {selectedSale.payment_method === 'CASH' && selectedSale.change_amount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Troco:</span>
+                        <span className="font-medium text-orange-600">
+                          {formatCurrency(parseFloat(selectedSale.change_amount))}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-2">Cliente</h4>
+                  <div className="text-sm">
+                    {selectedSale.customer ? (
+                      <div className="space-y-2">
+                        <div className="font-medium">{selectedSale.customer.name}</div>
+                        {selectedSale.customer.cpf && (
+                          <div className="text-gray-600">CPF: {selectedSale.customer.cpf}</div>
+                        )}
+                        {selectedSale.customer.cnpj && (
+                          <div className="text-gray-600">CNPJ: {selectedSale.customer.cnpj}</div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-gray-500">Cliente avulso</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Itens da venda */}
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-900 mb-4">Itens da Venda</h4>
+                <div className="bg-gray-50 rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-gray-200">
+                      <tr>
+                        <th className="text-left p-3 font-medium text-gray-700">Produto</th>
+                        <th className="text-center p-3 font-medium text-gray-700">Qtd</th>
+                        <th className="text-right p-3 font-medium text-gray-700">Vlr Unit</th>
+                        <th className="text-right p-3 font-medium text-gray-700">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedSale.sale_items?.map((item: any, index: number) => (
+                        <tr key={index} className="border-b border-gray-200">
+                          <td className="p-3 font-medium">{item.product_name}</td>
+                          <td className="p-3 text-center">{item.quantity}</td>
+                          <td className="p-3 text-right">{formatCurrency(parseFloat(item.unit_price))}</td>
+                          <td className="p-3 text-right font-medium">{formatCurrency(parseFloat(item.total_price))}</td>
+                        </tr>
+                      )) || []}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Total */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-semibold text-gray-900">Total da Venda:</span>
+                  <span className="text-2xl font-bold text-green-600">
+                    {formatCurrency(parseFloat(selectedSale.total_amount))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

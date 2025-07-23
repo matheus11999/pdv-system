@@ -38,6 +38,8 @@ export interface Customer {
   whatsapp?: string;
   credit_limit?: number;
   credit_balance?: number;
+  debt_balance?: number;
+  last_payment_date?: string;
 }
 
 export interface CustomerInput {
@@ -80,12 +82,32 @@ export function useCustomers() {
     try {
       const { data, error } = await supabase
         .from('customers')
-        .select('*')
+        .select(`
+          *,
+          customer_payments!customer_payments_customer_id_fkey(payment_date)
+        `)
         .eq('is_active', true)
         .order('name');
 
       if (error) throw error;
-      setCustomers(data || []);
+      
+      // Process customers to add last payment date
+      const customersWithPayments = (data || []).map(customer => {
+        const payments = customer.customer_payments || [];
+        const lastPaymentDate = payments.length > 0 
+          ? payments.reduce((latest: any, payment: any) => 
+              new Date(payment.payment_date) > new Date(latest.payment_date) ? payment : latest
+            ).payment_date 
+          : null;
+        
+        return {
+          ...customer,
+          last_payment_date: lastPaymentDate,
+          customer_payments: undefined // Remove from final object
+        };
+      });
+      
+      setCustomers(customersWithPayments);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar clientes');
     } finally {

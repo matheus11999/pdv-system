@@ -226,27 +226,21 @@ export function useSales() {
       // Apply loyalty points if customer exists
       if (saleData.customer_id) {
         try {
-          // Get system settings for loyalty points
-          const { data: settings } = await supabase
-            .from('company_settings')
-            .select('loyalty_points_enabled, loyalty_points_per_real')
-            .single();
-
-          if (settings?.loyalty_points_enabled && settings.loyalty_points_per_real > 0) {
-            const pointsToAdd = Math.floor(saleData.total_amount * settings.loyalty_points_per_real);
+          // Skip loyalty points for now as fields don't exist in company_settings
+          // TODO: Add loyalty points configuration when needed
+          const pointsToAdd = Math.floor(saleData.total_amount * 0.01); // 1 point per real for now
             
-            if (pointsToAdd > 0) {
-              // Update customer loyalty points
-              const { error: loyaltyError } = await supabase
-                .from('customers')
-                .update({
-                  loyalty_points: supabase.sql`loyalty_points + ${pointsToAdd}`
-                })
-                .eq('id', saleData.customer_id);
+          if (pointsToAdd > 0) {
+            // Update customer loyalty points
+            const { error: loyaltyError } = await supabase
+              .from('customers')
+              .update({
+                loyalty_points: supabase.sql`loyalty_points + ${pointsToAdd}`
+              })
+              .eq('id', saleData.customer_id);
 
-              if (loyaltyError) {
-                console.error('Error updating loyalty points:', loyaltyError);
-              }
+            if (loyaltyError) {
+              console.error('Error updating loyalty points:', loyaltyError);
             }
           }
         } catch (loyaltyError) {

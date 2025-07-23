@@ -9,6 +9,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
 import { useAuthStore } from '../../store/authStore';
+import { useStoreSettings } from '../../hooks/useStoreSettings';
 import { supabase } from '../../lib/supabase';
 import { updatePWAManifest } from '../../utils/pwaUtils';
 
@@ -49,6 +50,7 @@ interface SystemSettings {
   currency: 'BRL' | 'USD' | 'EUR';
   date_format: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
   timezone: string;
+  sound_effects_enabled: boolean;
   
   // Fidelidade
   loyalty_points_enabled: boolean;
@@ -65,7 +67,7 @@ interface SystemSettings {
 
 export const SettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'store' | 'fiscal' | 'payments' | 'pdv' | 'notifications' | 'interface' | 'loyalty' | 'pwa'>('loyalty');
-  const [settings, setSettings] = useState<SystemSettings>({
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>({
     // Valores padrão
     store_name: '',
     store_address: '',
@@ -97,6 +99,7 @@ export const SettingsPage: React.FC = () => {
     currency: 'BRL',
     date_format: 'DD/MM/YYYY',
     timezone: 'America/Sao_Paulo',
+    sound_effects_enabled: true,
     
     // Fidelidade
     loyalty_points_enabled: true,
@@ -115,6 +118,7 @@ export const SettingsPage: React.FC = () => {
   const [logoPreview, setLogoPreview] = useState<string>('');
   const [pwaIconPreview, setPwaIconPreview] = useState<string>('');
   const { profile } = useAuthStore();
+  const { settings: storeSettings, updateSettings: updateStoreSettings, loading: storeLoading } = useStoreSettings();
   
   const isAdmin = profile?.role === 'ADMIN';
 
@@ -562,60 +566,177 @@ export const SettingsPage: React.FC = () => {
               Configurações do PDV
             </h3>
             
-            <div className="space-y-4">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={settings.auto_print_receipt}
-                  onChange={(e) => setSettings({ ...settings, auto_print_receipt: e.target.checked })}
-                  disabled={!isAdmin}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label className="ml-2 text-sm text-gray-700">
-                  Imprimir cupom automaticamente
-                </label>
+            <div className="space-y-6">
+              {/* Configurações de Desconto e Vendas */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+                <h4 className="font-medium text-gray-900 mb-4 flex items-center">
+                  <Percent className="w-4 h-4 mr-2 text-blue-500" />
+                  Configurações de Desconto e Vendas
+                </h4>
+                
+                <div className="space-y-4">
+                  {/* Desconto máximo */}
+                  <div className="flex items-center space-x-4">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Desconto Máximo Permitido (%)
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={storeSettings?.max_discount_percentage || 0}
+                        onChange={(e) => {
+                          if (storeSettings) {
+                            updateStoreSettings({
+                              max_discount_percentage: parseFloat(e.target.value) || 0
+                            });
+                          }
+                        }}
+                        disabled={!isAdmin || storeLoading}
+                        className="max-w-xs"
+                        placeholder="10"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Limite máximo de desconto que pode ser aplicado em uma venda
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Vendas Fiado */}
+                  <div className="flex items-center justify-between p-4 bg-white rounded-lg border">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">
+                        Permitir Vendas Fiado
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Habilita o botão "Vender Fiado" no PDV para vendas a crédito
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={storeSettings?.allow_credit_sales ?? true}
+                        onChange={(e) => {
+                          if (storeSettings) {
+                            updateStoreSettings({
+                              allow_credit_sales: e.target.checked
+                            });
+                          }
+                        }}
+                        disabled={!isAdmin || storeLoading}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"></div>
+                    </label>
+                  </div>
+                </div>
               </div>
-              
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={settings.require_customer}
-                  onChange={(e) => setSettings({ ...settings, require_customer: e.target.checked })}
-                  disabled={!isAdmin}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label className="ml-2 text-sm text-gray-700">
-                  Exigir seleção de cliente
-                </label>
+
+              {/* Configurações de Som */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6">
+                <h4 className="font-medium text-gray-900 mb-4 flex items-center">
+                  <Volume2 className="w-4 h-4 mr-2 text-green-500" />
+                  Configurações de Áudio
+                </h4>
+                
+                <div className="flex items-center justify-between p-4 bg-white rounded-lg border">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">
+                      Efeitos Sonoros
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Ativar sons ao escanear códigos de barras e confirmar vendas
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={storeSettings?.sound_effects_enabled ?? true}
+                      onChange={(e) => {
+                        const newValue = e.target.checked;
+                        if (storeSettings) {
+                          updateStoreSettings({
+                            sound_effects_enabled: newValue
+                          });
+                        }
+                        // Update sound settings immediately
+                        import('../../utils/sound').then(({ setSoundEnabled }) => {
+                          setSoundEnabled(newValue);
+                        });
+                      }}
+                      disabled={!isAdmin || storeLoading}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"></div>
+                  </label>
+                </div>
               </div>
-              
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={settings.allow_negative_stock}
-                  onChange={(e) => setSettings({ ...settings, allow_negative_stock: e.target.checked })}
-                  disabled={!isAdmin}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label className="ml-2 text-sm text-gray-700">
-                  Permitir estoque negativo
-                </label>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Frequência de Backup Automático
-                </label>
-                <select
-                  value={settings.auto_backup_frequency}
-                  onChange={(e) => setSettings({ ...settings, auto_backup_frequency: e.target.value as any })}
-                  disabled={!isAdmin}
-                  className="w-full p-2 border border-gray-300 rounded-md disabled:bg-gray-100 max-w-xs"
-                >
-                  <option value="daily">Diário</option>
-                  <option value="weekly">Semanal</option>
-                  <option value="monthly">Mensal</option>
-                </select>
+
+              {/* Configurações Gerais do PDV */}
+              <div className="bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-lg p-6">
+                <h4 className="font-medium text-gray-900 mb-4 flex items-center">
+                  <Settings className="w-4 h-4 mr-2 text-gray-500" />
+                  Configurações Gerais
+                </h4>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={systemSettings.auto_print_receipt}
+                      onChange={(e) => setSystemSettings({ ...systemSettings, auto_print_receipt: e.target.checked })}
+                      disabled={!isAdmin}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label className="ml-2 text-sm text-gray-700">
+                      Imprimir cupom automaticamente
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={systemSettings.require_customer}
+                      onChange={(e) => setSystemSettings({ ...systemSettings, require_customer: e.target.checked })}
+                      disabled={!isAdmin}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label className="ml-2 text-sm text-gray-700">
+                      Exigir seleção de cliente
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={systemSettings.allow_negative_stock}
+                      onChange={(e) => setSystemSettings({ ...systemSettings, allow_negative_stock: e.target.checked })}
+                      disabled={!isAdmin}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label className="ml-2 text-sm text-gray-700">
+                      Permitir estoque negativo
+                    </label>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Frequência de Backup Automático
+                    </label>
+                    <select
+                      value={systemSettings.auto_backup_frequency}
+                      onChange={(e) => setSystemSettings({ ...systemSettings, auto_backup_frequency: e.target.value as any })}
+                      disabled={!isAdmin}
+                      className="w-full p-2 border border-gray-300 rounded-md disabled:bg-gray-100 max-w-xs"
+                    >
+                      <option value="daily">Diário</option>
+                      <option value="weekly">Semanal</option>
+                      <option value="monthly">Mensal</option>
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
           </Card>
@@ -747,6 +868,42 @@ export const SettingsPage: React.FC = () => {
                   <option value="America/Manaus">Manaus (GMT-4)</option>
                   <option value="America/Rio_Branco">Rio Branco (GMT-5)</option>
                 </select>
+              </div>
+            </div>
+            
+            {/* Configurações de Áudio */}
+            <div className="mt-6">
+              <h4 className="text-md font-semibold mb-4 flex items-center">
+                <Volume2 className="w-4 h-4 mr-2" />
+                Configurações de Áudio
+              </h4>
+              
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Efeitos Sonoros
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Ativar sons ao escanear códigos de barras e confirmar vendas
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.sound_effects_enabled}
+                    onChange={(e) => {
+                      const newSettings = { ...settings, sound_effects_enabled: e.target.checked };
+                      setSettings(newSettings);
+                      // Update sound settings immediately
+                      import('../../utils/sound').then(({ setSoundEnabled }) => {
+                        setSoundEnabled(e.target.checked);
+                      });
+                    }}
+                    disabled={!isAdmin}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"></div>
+                </label>
               </div>
             </div>
           </Card>
