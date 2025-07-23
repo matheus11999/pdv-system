@@ -34,16 +34,20 @@ export const PWAInstallPrompt: React.FC = () => {
     checkIfInstalled();
 
     const handleBeforeInstallPrompt = (e: Event) => {
+      console.log('beforeinstallprompt event fired');
       e.preventDefault();
       const promptEvent = e as BeforeInstallPromptEvent;
       setDeferredPrompt(promptEvent);
       
-      // Show prompt after 30 seconds if not dismissed
+      // Show prompt immediately for testing, then after 5 seconds for production
       setTimeout(() => {
         if (!localStorage.getItem('pwa-prompt-dismissed')) {
+          console.log('Showing PWA install prompt');
           setShowPrompt(true);
+        } else {
+          console.log('PWA prompt was dismissed, not showing');
         }
-      }, 30000);
+      }, 5000); // Reduced from 30s to 5s for better UX
     };
 
     const handleAppInstalled = () => {
@@ -55,9 +59,18 @@ export const PWAInstallPrompt: React.FC = () => {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
+    // Fallback: If no beforeinstallprompt event is fired after 10 seconds, show anyway
+    const fallbackTimer = setTimeout(() => {
+      if (!deferredPrompt && !isInstalled && !localStorage.getItem('pwa-prompt-dismissed')) {
+        console.log('No beforeinstallprompt event detected, showing fallback prompt');
+        setShowPrompt(true);
+      }
+    }, 10000);
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      clearTimeout(fallbackTimer);
     };
   }, []);
 

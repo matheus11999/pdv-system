@@ -100,12 +100,36 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       // Set video stream
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        videoRef.current.play();
+        
+        // Add play promise handling for better browser compatibility
+        const playPromise = videoRef.current.play();
+        
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            // Video started playing successfully
+            console.log('Video playing successfully');
+          }).catch(error => {
+            console.error('Error playing video:', error);
+            setError('Erro ao iniciar o vídeo da câmera');
+            setIsLoading(false);
+            return;
+          });
+        }
         
         videoRef.current.onloadedmetadata = () => {
+          console.log('Video metadata loaded');
           setDetectionActive(true);
           setIsLoading(false);
         };
+        
+        // Fallback timeout in case onloadedmetadata doesn't fire
+        setTimeout(() => {
+          if (isLoading) {
+            console.log('Fallback: forcing loading to false');
+            setIsLoading(false);
+            setDetectionActive(true);
+          }
+        }, 3000);
       }
       
     } catch (err: any) {

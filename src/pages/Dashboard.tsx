@@ -145,29 +145,18 @@ function Sidebar({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onTo
   const sortedMenuItems = menuItems.sort((a, b) => (a.priority || 999) - (b.priority || 999));
 
   return (
-    <div className={`${isCollapsed ? 'w-16' : 'w-64'} bg-white h-full shadow-lg transition-all duration-300 ease-in-out ${isCollapsed ? '' : 'lg:relative fixed inset-y-0 left-0 z-50 lg:z-auto'}`}>
-      {/* Header com botão de colapsar */}
-      <div className="p-4 border-b flex items-center justify-between">
+    <div className={`${isCollapsed ? 'w-0 lg:w-16' : 'w-64'} bg-white h-full shadow-lg transition-all duration-300 ease-in-out ${isCollapsed ? 'overflow-hidden' : 'lg:relative fixed inset-y-0 left-0 z-50 lg:z-auto'}`}>
+      {/* Header */}
+      <div className="p-4 border-b">
         <div className={`${isCollapsed ? 'hidden' : 'block'}`}>
           <h2 className="text-xl font-semibold text-blue-600">Sistema PDV</h2>
           <p className="text-sm text-gray-600">{profile?.name || 'Usuário'}</p>
           <p className="text-xs text-gray-500">{userRole}</p>
         </div>
-        <button
-          onClick={onToggleCollapse}
-          className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-          title={isCollapsed ? 'Expandir menu' : 'Recolher menu'}
-        >
-          {isCollapsed ? (
-            <Menu className="w-5 h-5 text-gray-600" />
-          ) : (
-            <X className="w-5 h-5 text-gray-600" />
-          )}
-        </button>
       </div>
       
       {/* Navigation */}
-      <nav className="p-2 space-y-1">
+      <nav className={`p-2 space-y-1 ${isCollapsed ? 'hidden lg:block' : 'block'}`}>
         {sortedMenuItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -197,9 +186,9 @@ function Sidebar({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onTo
         })}
       </nav>
       
-      {/* Footer com informações do usuário quando colapsado */}
+      {/* Footer com informações do usuário quando colapsado no desktop */}
       {isCollapsed && (
-        <div className="absolute bottom-4 left-2 right-2">
+        <div className="hidden lg:block absolute bottom-4 left-2 right-2">
           <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto">
             <span className="text-blue-600 font-bold text-sm">
               {profile?.name?.charAt(0) || 'U'}
