@@ -296,7 +296,7 @@ export const ProductsPage: React.FC = () => {
 
             {/* Desktop Table Layout */}
             <div className="hidden md:block overflow-x-auto">
-            <table className="w-full">
+              <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -404,8 +404,9 @@ export const ProductsPage: React.FC = () => {
                   );
                 })}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         )}
 
         {!loading && filteredProducts.length === 0 && (
