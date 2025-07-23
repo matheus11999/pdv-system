@@ -67,35 +67,63 @@ export const PWAInstallPrompt: React.FC = () => {
       }
     }, 10000);
 
+    // Test timer: Show prompt after 3 seconds for immediate testing
+    const testTimer = setTimeout(() => {
+      if (!localStorage.getItem('pwa-prompt-dismissed')) {
+        console.log('Test prompt showing');
+        setShowPrompt(true);
+      }
+    }, 3000);
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
       clearTimeout(fallbackTimer);
+      clearTimeout(testTimer);
     };
   }, []);
 
   const handleInstall = async () => {
+    console.log('Install button clicked, deferredPrompt:', !!deferredPrompt);
+    
     if (!deferredPrompt) {
       // For iOS Safari, show instructions
       if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-        alert('Para instalar: Toque no botão "Compartilhar" e selecione "Adicionar à Tela de Início"');
+        alert('Para instalar: Toque no botão "Compartilhar" (ícone de compartilhamento) na parte inferior da tela e selecione "Adicionar à Tela de Início"');
+        setShowPrompt(false);
         return;
       }
+      
+      // For other browsers without native support, show manual instructions
+      alert('Para instalar como aplicativo:\n\n' +
+            'Chrome: Menu → Instalar aplicativo\n' +
+            'Edge: Menu → Aplicativos → Instalar este site como aplicativo\n' +
+            'Firefox: Menu → Adicionar à tela inicial');
+      setShowPrompt(false);
       return;
     }
 
     try {
-      await deferredPrompt.prompt();
+      console.log('Attempting to show install prompt');
+      const promptResult = await deferredPrompt.prompt();
+      console.log('Prompt result:', promptResult);
+      
       const choiceResult = await deferredPrompt.userChoice;
+      console.log('User choice:', choiceResult.outcome);
       
       if (choiceResult.outcome === 'accepted') {
-        console.log('PWA instalado com sucesso');
+        console.log('PWA instalação aceita pelo usuário');
+        setIsInstalled(true);
+      } else {
+        console.log('PWA instalação rejeitada pelo usuário');
       }
       
       setDeferredPrompt(null);
       setShowPrompt(false);
     } catch (error) {
-      console.error('Erro ao instalar PWA:', error);
+      console.error('Erro ao tentar instalar PWA:', error);
+      // Even if error, hide the prompt
+      setShowPrompt(false);
     }
   };
 
@@ -155,6 +183,18 @@ export const PWAInstallPrompt: React.FC = () => {
           Agora não
         </Button>
       </div>
+      
+      {/* Debug button - remove in production */}
+      <button
+        onClick={() => {
+          localStorage.removeItem('pwa-prompt-dismissed');
+          console.log('PWA dismissed flag cleared');
+        }}
+        className="text-xs text-gray-400 hover:text-gray-600 mt-2"
+        style={{ fontSize: '10px' }}
+      >
+        [Debug: Reset prompt]
+      </button>
     </div>
   );
 };

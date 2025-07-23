@@ -85,54 +85,78 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     setError('');
     
     try {
-      // Request camera permission
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
+      console.log('Requesting camera access...');
+      
+      // Request camera permission with fallback constraints
+      let constraints = {
         video: {
           facingMode: 'environment', // Use back camera if available
           width: { ideal: 1280 },
           height: { ideal: 720 }
         }
-      });
+      };
       
+      let mediaStream;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (backCameraError) {
+        console.log('Back camera failed, trying front camera');
+        // If back camera fails, try front camera
+        constraints.video.facingMode = 'user';
+        mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      }
+      
+      console.log('Camera access granted, setting up video');
       setStream(mediaStream);
       setPermissionGranted(true);
       
       // Set video stream
       if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
+        const video = videoRef.current;
+        video.srcObject = mediaStream;
         
-        // Add play promise handling for better browser compatibility
-        const playPromise = videoRef.current.play();
-        
-        if (playPromise !== undefined) {
-          playPromise.then(() => {
-            // Video started playing successfully
-            console.log('Video playing successfully');
-          }).catch(error => {
-            console.error('Error playing video:', error);
-            setError('Erro ao iniciar o vídeo da câmera');
-            setIsLoading(false);
-            return;
-          });
-        }
-        
-        videoRef.current.onloadedmetadata = () => {
-          console.log('Video metadata loaded');
-          setDetectionActive(true);
+        // Force immediate loading end
+        setTimeout(() => {
+          console.log('Force setting loading to false');
           setIsLoading(false);
+          setDetectionActive(true);
+        }, 1000);
+        
+        // Multiple event listeners for different scenarios
+        video.onloadeddata = () => {
+          console.log('Video data loaded');
+          setIsLoading(false);
+          setDetectionActive(true);
         };
         
-        // Fallback timeout in case onloadedmetadata doesn't fire
-        setTimeout(() => {
-          if (isLoading) {
-            console.log('Fallback: forcing loading to false');
-            setIsLoading(false);
-            setDetectionActive(true);
-          }
-        }, 3000);
+        video.oncanplay = () => {
+          console.log('Video can play');
+          setIsLoading(false);
+          setDetectionActive(true);
+        };
+        
+        video.onplaying = () => {
+          console.log('Video is playing');
+          setIsLoading(false);
+          setDetectionActive(true);
+        };
+        
+        // Try to play the video
+        try {
+          await video.play();
+          console.log('Video play successful');
+          setIsLoading(false);
+          setDetectionActive(true);
+        } catch (playError) {
+          console.error('Video play failed:', playError);
+          // Still proceed even if play fails
+          setIsLoading(false);
+          setDetectionActive(true);
+        }
       }
       
     } catch (err: any) {
+      console.error('Camera initialization failed:', err);
       setIsLoading(false);
       
       if (err.name === 'NotAllowedError') {
