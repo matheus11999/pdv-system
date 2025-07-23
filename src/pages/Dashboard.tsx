@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../lib/supabase';
@@ -38,19 +38,24 @@ const SettingsPage = React.lazy(() => import('./PDV/SettingsPage').then(module =
 const CommissionDashboard = React.lazy(() => import('../components/CommissionDashboard').then(module => ({ default: module.CommissionDashboard })));
 const MyReportsPage = React.lazy(() => import('./PDV/MyReportsPage').then(module => ({ default: module.MyReportsPage })));
 
-function Sidebar({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onToggleCollapse: () => void }) {
+const Sidebar = React.memo(({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onToggleCollapse: () => void }) => {
   const { profile, user, loading } = useAuthStore();
   
-  
-  // Se não tiver profile carregado ainda, assume ADMIN para mostrar todos os itens
-  const userRole = profile?.role || 'ADMIN';
-  const isAdmin = userRole === 'ADMIN';
-  const canUsePOS = ['ADMIN', 'FUNCIONARIO'].includes(userRole);
-  const canManageProducts = ['ADMIN', 'FUNCIONARIO'].includes(userRole);
-  const hasCommissions = profile?.commission_enabled;
+  // Memoização das verificações de permissão
+  const userPermissions = useMemo(() => {
+    const userRole = profile?.role || 'ADMIN';
+    return {
+      userRole,
+      isAdmin: userRole === 'ADMIN',
+      canUsePOS: ['ADMIN', 'FUNCIONARIO'].includes(userRole),
+      canManageProducts: ['ADMIN', 'FUNCIONARIO'].includes(userRole),
+      hasCommissions: profile?.commission_enabled
+    };
+  }, [profile?.role, profile?.commission_enabled]);
 
-  const menuItems = [
-    ...(canUsePOS ? [{
+  // Memoização dos items do menu
+  const menuItems = useMemo(() => [
+    ...(userPermissions.canUsePOS ? [{
       path: '/dashboard/pdv',
       icon: Calculator,
       label: 'ABRIR PDV',
@@ -65,14 +70,14 @@ function Sidebar({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onTo
       priority: 2
     },
     
-    ...(hasCommissions ? [{
+    ...(userPermissions.hasCommissions ? [{
       path: '/dashboard/commissions',
       icon: DollarSign,
       label: 'Minhas Comissões',
       priority: 2.5
     }] : []),
     
-    ...(canManageProducts ? [
+    ...(userPermissions.canManageProducts ? [
       {
         path: '/dashboard/products',
         icon: Package,
@@ -87,7 +92,7 @@ function Sidebar({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onTo
       }
     ] : []),
     
-    ...(canUsePOS ? [
+    ...(userPermissions.canUsePOS ? [
       {
         path: '/dashboard/customers',
         icon: Users,
@@ -100,7 +105,7 @@ function Sidebar({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onTo
         label: 'Vendas',
         priority: 6
       },
-      ...(userRole === 'FUNCIONARIO' ? [{
+      ...(userPermissions.userRole === 'FUNCIONARIO' ? [{
         path: '/dashboard/my-reports',
         icon: BarChart3,
         label: 'Meus Relatórios',
@@ -108,7 +113,7 @@ function Sidebar({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onTo
       }] : [])
     ] : []),
     
-    ...(isAdmin ? [
+    ...(userPermissions.isAdmin ? [
       {
         path: '/dashboard/categories',
         icon: Package,
@@ -140,10 +145,13 @@ function Sidebar({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onTo
         priority: 10
       }
     ] : [])
-  ];
+  ], [userPermissions]);
 
-  // Sort by priority
-  const sortedMenuItems = menuItems.sort((a, b) => (a.priority || 999) - (b.priority || 999));
+  // Memoização da ordenação dos itens
+  const sortedMenuItems = useMemo(() => 
+    menuItems.sort((a, b) => (a.priority || 999) - (b.priority || 999)),
+    [menuItems]
+  );
 
   return (
     <div className={`${isCollapsed ? 'w-0 lg:w-16' : 'w-64'} bg-gradient-to-b from-white via-slate-50 to-white h-full shadow-xl border-r border-gray-200 transition-all duration-300 ease-in-out ${isCollapsed ? 'overflow-hidden' : 'lg:relative fixed inset-y-0 left-0 z-50 lg:z-auto'}`}>
@@ -156,7 +164,7 @@ function Sidebar({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onTo
                 Sistema PDV
               </h2>
               <p className="text-sm font-medium text-slate-700">{profile?.name || 'Usuário'}</p>
-              <p className="text-xs text-slate-500">{userRole}</p>
+              <p className="text-xs text-slate-500">{userPermissions.userRole}</p>
             </div>
             <button
               onClick={onToggleCollapse}
@@ -226,7 +234,7 @@ function Sidebar({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onTo
       )}
     </div>
   );
-}
+});
 
 interface DashboardStats {
   salesToday: number;
@@ -275,7 +283,7 @@ function DashboardHome() {
   const [selectedSale, setSelectedSale] = useState<any>(null);
   const [showSaleDetails, setShowSaleDetails] = useState(false);
 
-  const fetchSaleDetails = async (saleNumber: string) => {
+  const fetchSaleDetails = useCallback(async (saleNumber: string) => {
     try {
       const { data, error } = await supabase
         .from('sales')
@@ -299,13 +307,9 @@ function DashboardHome() {
     } catch (error) {
       console.error('Erro ao buscar detalhes da venda:', error);
     }
-  };
-
-  useEffect(() => {
-    fetchDashboardData();
   }, []);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -350,7 +354,7 @@ function DashboardHome() {
         }
       }
       
-      // Get stats
+      // Get stats - otimizado para apenas 5 vendas recentes
       let salesQuery = supabase
         .from('sales')
         .select(`
@@ -361,6 +365,7 @@ function DashboardHome() {
           user_id,
           customers(name)
         `)
+        .eq('status', 'COMPLETED')
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -437,34 +442,32 @@ function DashboardHome() {
       ]);
 
       if (salesResult.data) {
-        const salesWithCashiers = await Promise.all(
-          salesResult.data.map(async (sale) => {
-            let cashierName = null;
-            let cashierRole = null;
-            
-            if (sale.cashier_id) {
-              const { data: cashierData } = await supabase
-                .from('users')
-                .select('name, role')
-                .eq('id', sale.cashier_id)
-                .single();
-              
-              if (cashierData) {
-                cashierName = cashierData.name;
-                cashierRole = cashierData.role;
-              }
-            }
-            
-            return {
-              sale_number: sale.sale_number,
-              customer_name: sale.customers?.name || null,
-              cashier_name: cashierName,
-              cashier_role: cashierRole,
-              total_amount: sale.total_amount,
-              sale_date: sale.created_at
-            };
-          })
-        );
+        // Otimização: buscar todos os cashiers de uma vez
+        const cashierIds = [...new Set(salesResult.data.map(sale => sale.cashier_id).filter(Boolean))];
+        let cashiersMap = new Map();
+        
+        if (cashierIds.length > 0) {
+          const { data: cashiersData } = await supabase
+            .from('users')
+            .select('id, name, role')
+            .in('id', cashierIds);
+          
+          if (cashiersData) {
+            cashiersMap = new Map(cashiersData.map(cashier => [cashier.id, cashier]));
+          }
+        }
+        
+        const salesWithCashiers = salesResult.data.map(sale => {
+          const cashier = cashiersMap.get(sale.cashier_id);
+          return {
+            sale_number: sale.sale_number,
+            customer_name: sale.customers?.name || null,
+            cashier_name: cashier?.name || null,
+            cashier_role: cashier?.role || null,
+            total_amount: sale.total_amount,
+            sale_date: sale.created_at
+          };
+        });
         
         setRecentSales(salesWithCashiers);
       }
@@ -477,7 +480,11 @@ function DashboardHome() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {

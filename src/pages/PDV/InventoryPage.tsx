@@ -289,36 +289,37 @@ export const InventoryPage: React.FC = () => {
     : products;
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="p-4 lg:p-6">
+      {/* Header - Responsivo */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Controle de Estoque</h1>
-          <p className="text-gray-600">Gerencie e monitore seu estoque</p>
+          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Controle de Estoque</h1>
+          <p className="text-sm lg:text-base text-gray-600">Gerencie e monitore seu estoque</p>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+      {/* Stats Cards - Otimizado para mobile */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6 mb-6">
         {stockStats.map((stat, index) => {
           const Icon = stat.icon;
           return (
-            <Card key={index} className="p-6">
-              <div className="flex items-center">
-                <Icon className={`w-8 h-8 ${stat.color} mr-3`} />
-                <div>
-                  <p className="text-sm text-gray-600">{stat.title}</p>
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+            <Card key={index} className="p-3 lg:p-6">
+              <div className="flex items-center justify-between lg:justify-start">
+                <div className="min-w-0 flex-1 lg:flex-initial">
+                  <p className="text-xs lg:text-sm text-gray-600 truncate">{stat.title}</p>
+                  <p className="text-base lg:text-2xl font-bold text-gray-900 truncate">{stat.value}</p>
                 </div>
+                <Icon className={`w-5 h-5 lg:w-8 lg:h-8 ${stat.color} lg:mr-3 lg:ml-3 flex-shrink-0`} />
               </div>
             </Card>
           );
         })}
       </div>
 
-      {/* Tabs */}
+      {/* Tabs - Responsivo */}
       <div className="mb-6">
         <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
+          <nav className="-mb-px flex space-x-4 lg:space-x-8 overflow-x-auto">
             {[
               { key: 'overview', label: 'Visão Geral' },
               { key: 'movements', label: 'Movimentações' },
@@ -327,7 +328,7 @@ export const InventoryPage: React.FC = () => {
               <button
                 key={tab.key}
                 onClick={() => setSelectedTab(tab.key as any)}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                className={`py-2 px-1 border-b-2 font-medium text-xs lg:text-sm whitespace-nowrap ${
                   selectedTab === tab.key
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'

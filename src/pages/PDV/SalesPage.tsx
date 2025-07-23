@@ -13,6 +13,8 @@ export const SalesPage: React.FC = () => {
   const [selectedSale, setSelectedSale] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
   const [employees, setEmployees] = useState<Array<{id: string, name: string}>>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(20);
 
   const { sales, loading, error } = useSales();
 
@@ -48,6 +50,17 @@ export const SalesPage: React.FC = () => {
     
     return matchesSearch && matchesEmployee;
   });
+
+  // Cálculos de paginação
+  const totalPages = Math.ceil(filteredSales.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedSales = filteredSales.slice(startIndex, endIndex);
+
+  // Reset page quando filtros mudam
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedEmployee, selectedPeriod]);
 
   const getPaymentMethodLabel = (method: string) => {
     const methods: Record<string, string> = {
@@ -170,83 +183,95 @@ export const SalesPage: React.FC = () => {
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
-        <Card className="p-6">
+      {/* Stats Cards - Otimizado para mobile */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6 mb-6">
+        <Card className="p-4 lg:p-6">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total</p>
-              <p className="text-2xl font-bold text-green-600">R$ {totalRevenue.toFixed(2)}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs lg:text-sm text-gray-600 truncate">Total</p>
+              <p className="text-lg lg:text-2xl font-bold text-green-600 truncate">R$ {totalRevenue.toFixed(2)}</p>
             </div>
-            <Receipt className="w-8 h-8 text-green-500" />
+            <Receipt className="w-6 h-6 lg:w-8 lg:h-8 text-green-500 flex-shrink-0" />
           </div>
         </Card>
-        <Card className="p-6">
+        <Card className="p-4 lg:p-6">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Vendas</p>
-              <p className="text-2xl font-bold text-blue-600">{totalSales}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs lg:text-sm text-gray-600 truncate">Vendas</p>
+              <p className="text-lg lg:text-2xl font-bold text-blue-600 truncate">{totalSales}</p>
             </div>
-            <Receipt className="w-8 h-8 text-blue-500" />
+            <Receipt className="w-6 h-6 lg:w-8 lg:h-8 text-blue-500 flex-shrink-0" />
           </div>
         </Card>
-        <Card className="p-6">
+        <Card className="p-4 lg:p-6">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Ticket Médio</p>
-              <p className="text-2xl font-bold text-purple-600">R$ {averageTicket.toFixed(2)}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs lg:text-sm text-gray-600 truncate">Ticket Médio</p>
+              <p className="text-lg lg:text-2xl font-bold text-purple-600 truncate">R$ {averageTicket.toFixed(2)}</p>
             </div>
-            <Receipt className="w-8 h-8 text-purple-500" />
+            <Receipt className="w-6 h-6 lg:w-8 lg:h-8 text-purple-500 flex-shrink-0" />
           </div>
         </Card>
-        <Card className="p-6">
+        <Card className="p-4 lg:p-6">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Canceladas</p>
-              <p className="text-2xl font-bold text-red-600">{cancelledSales}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs lg:text-sm text-gray-600 truncate">Canceladas</p>
+              <p className="text-lg lg:text-2xl font-bold text-red-600 truncate">{cancelledSales}</p>
             </div>
-            <Receipt className="w-8 h-8 text-red-500" />
+            <Receipt className="w-6 h-6 lg:w-8 lg:h-8 text-red-500 flex-shrink-0" />
           </div>
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Filters - Otimizado e mais responsivo */}
       <Card className="p-4 mb-6">
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-col lg:flex-row gap-3 lg:gap-4">
+          {/* Search Input */}
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
               placeholder="Buscar por número da venda ou cliente..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-9 text-sm h-10"
             />
           </div>
-          <select 
-            className="px-3 py-2 border border-gray-300 rounded-md"
-            value={selectedEmployee}
-            onChange={(e) => setSelectedEmployee(e.target.value)}
-          >
-            <option value="all">Todos os funcionários</option>
-            {employees.map(employee => (
-              <option key={employee.id} value={employee.id}>
-                {employee.name}
-              </option>
-            ))}
-          </select>
-          <select 
-            className="px-3 py-2 border border-gray-300 rounded-md"
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value)}
-          >
-            <option value="today">Hoje</option>
-            <option value="week">Esta Semana</option>
-            <option value="month">Este Mês</option>
-          </select>
-          <Button variant="secondary">
-            <Filter className="w-4 h-4 mr-2" />
-            Filtros
-          </Button>
+          
+          {/* Filters Row */}
+          <div className="flex flex-col sm:flex-row gap-3 lg:gap-4">
+            {/* Employee Filter */}
+            <select 
+              className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[160px] h-10"
+              value={selectedEmployee}
+              onChange={(e) => setSelectedEmployee(e.target.value)}
+            >
+              <option value="all">Todos os funcionários</option>
+              {employees.map(employee => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.name}
+                </option>
+              ))}
+            </select>
+            
+            {/* Period Filter */}
+            <select 
+              className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[140px] h-10"
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+            >
+              <option value="today">Hoje</option>
+              <option value="week">Esta Semana</option>
+              <option value="month">Este Mês</option>
+            </select>
+            
+            {/* Export Button - Hidden on small screens */}
+            <div className="hidden sm:block">
+              <Button variant="secondary" size="sm" className="h-10">
+                <Filter className="w-4 h-4 mr-2" />
+                <span className="hidden lg:inline">Filtros</span>
+              </Button>
+            </div>
+          </div>
         </div>
       </Card>
 
@@ -255,7 +280,7 @@ export const SalesPage: React.FC = () => {
         {/* Mobile Card Layout */}
         <div className="block md:hidden">
           <div className="p-4 space-y-4">
-            {filteredSales.map((sale) => {
+            {paginatedSales.map((sale) => {
               const dateTime = formatDateTime(sale.created_at);
               const itemsCount = sale.sale_items?.length || 0;
               return (
@@ -351,7 +376,7 @@ export const SalesPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredSales.map((sale) => {
+              {paginatedSales.map((sale) => {
                 const dateTime = formatDateTime(sale.created_at);
                 const itemsCount = sale.sale_items?.length || 0;
                 return (
@@ -437,13 +462,63 @@ export const SalesPage: React.FC = () => {
           </table>
         </div>
 
-        {filteredSales.length === 0 && (
+        {paginatedSales.length === 0 && filteredSales.length === 0 && (
           <div className="text-center py-12">
             <Receipt className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">Nenhuma venda encontrada</p>
           </div>
         )}
       </Card>
+
+      {/* Controles de Paginação */}
+      {totalPages > 1 && (
+        <Card className="p-4 mt-4">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="text-sm text-gray-600">
+              Mostrando {startIndex + 1} - {Math.min(endIndex, filteredSales.length)} de {filteredSales.length} vendas
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(Math.max(currentPage - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+              
+              <div className="flex space-x-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const pageNum = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i;
+                  if (pageNum > totalPages) return null;
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`px-3 py-2 text-sm border border-gray-300 rounded-md ${
+                        currentPage === pageNum
+                          ? 'bg-blue-500 text-white border-blue-500'
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              
+              <button
+                onClick={() => setCurrentPage(Math.min(currentPage + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Próximo
+              </button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Sale Details Modal */}
       {selectedSale && (() => {
