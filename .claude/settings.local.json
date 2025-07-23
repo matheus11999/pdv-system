@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(env)",
+      "Bash(PGPASSWORD=\"password\" psql -h db.szzgqacuomtlbpouegtw.supabase.co -p 5432 -U postgres -d postgres -c \"\\dt\")",
+      "Bash(npm install:*)",
+      "Bash(node:*)",
+      "Bash(npm audit:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:szzgqacuomtlbpouegtw.supabase.co)",
+      "mcp__supabase__list_projects",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__apply_migration",
+      "Bash(rm:*)",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__get_logs",
+      "mcp__supabase__search_docs",
+      "mcp__supabase__get_advisors",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run clear-cache:*)",
+      "Bash(ls:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git remote add:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(git push:*)",
+      "Bash(npx update-browserslist-db:*)"
+    ],
+    "deny": []
+  }
+}

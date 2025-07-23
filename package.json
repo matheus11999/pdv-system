@@ -7,6 +7,7 @@
     "dev": "vite --force --clearScreen",
     "dev-fresh": "npm run clear-cache && vite --force --clearScreen",
     "build": "vite build",
+    "start": "serve dist -s -l ${PORT:-3000}",
     "lint": "eslint .",
     "preview": "vite preview",
     "clear-cache": "rm -rf node_modules/.vite && rm -rf dist"
@@ -25,6 +26,7 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.22.2",
     "react-select": "^5.10.2",
+    "serve": "^14.2.4",
     "tailwind-merge": "^3.3.1",
     "zustand": "^4.5.2"
   },
