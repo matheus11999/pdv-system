@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabase';
 import { generateReceiptPDF, generateReceiptHTML, openReceiptInNewTab } from '../../utils/receiptPDF';
 import { useAlert } from '../../components/AlertProvider';
 import { useStoreSettings } from '../../hooks/useStoreSettings';
+import { BarcodeScanner } from '../../components/BarcodeScanner';
 
 interface CartItem {
   id: string;
@@ -1049,73 +1050,11 @@ export const PDVInterface: React.FC = () => {
       </div>
 
       {/* Scanner Modal */}
-      {showScanner && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
-          <div className="w-full max-w-sm mx-4">
-            <div className="bg-white rounded-2xl p-6 text-center">
-              <div className="mb-4">
-                <QrCode className="w-16 h-16 mx-auto text-blue-600 mb-4" />
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Scanner de Código de Barras</h3>
-                <p className="text-gray-600 text-sm">
-                  Posicione o código de barras na frente da câmera
-                </p>
-              </div>
-
-              {/* Camera Preview Area */}
-              <div className="bg-gray-100 rounded-xl h-48 mb-4 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-16 h-16 border-2 border-blue-500 rounded-lg flex items-center justify-center mx-auto mb-2">
-                    <QrCode className="w-8 h-8 text-blue-500" />
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    Câmera inicializando...
-                  </p>
-                </div>
-              </div>
-
-              {/* Test Buttons - Para desenvolvimento */}
-              <div className="space-y-2 mb-4">
-                <p className="text-xs text-gray-500 mb-2">Modo de desenvolvimento:</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleScanResult('7891234567890')}
-                    className="flex-1 bg-blue-100 text-blue-700 py-2 px-3 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors"
-                  >
-                    Simular Código 1
-                  </button>
-                  <button
-                    onClick={() => handleScanResult('1234567890123')}
-                    className="flex-1 bg-green-100 text-green-700 py-2 px-3 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors"
-                  >
-                    Simular Código 2
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={stopScanner}
-                  className="flex-1 bg-gray-100 text-gray-700 py-3 px-4 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => {
-                    // Entrada manual do código
-                    const code = prompt('Digite o código de barras:');
-                    if (code) {
-                      handleScanResult(code);
-                    }
-                  }}
-                  className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-xl font-semibold hover:bg-blue-700 transition-colors"
-                >
-                  Digitar Código
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <BarcodeScanner
+        isOpen={showScanner}
+        onClose={stopScanner}
+        onScan={handleScanResult}
+      />
 
       {/* Payment Modal */}
       {showPaymentModal && (
@@ -1146,17 +1085,70 @@ export const PDVInterface: React.FC = () => {
                 </div>
               </div>
               
-              {selectedCustomer && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
-                  <div className="flex items-center">
-                    <User className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 mr-2" />
-                    <div>
-                      <p className="font-semibold text-blue-800 text-sm sm:text-base">Cliente selecionado</p>
-                      <p className="text-blue-600 text-sm">{customers.find(c => c.id === selectedCustomer)?.name}</p>
+              {/* Customer Selection */}
+              <div className="mb-4 sm:mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  <User className="w-4 h-4 inline mr-2" />
+                  Cliente (opcional)
+                </label>
+                
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Buscar cliente por nome, telefone ou documento..."
+                    value={customerSearchTerm}
+                    onChange={(e) => {
+                      setCustomerSearchTerm(e.target.value);
+                      searchCustomers(e.target.value);
+                    }}
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm sm:text-base"
+                  />
+                  
+                  {customerSearchTerm && filteredCustomers.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg z-10 max-h-40 overflow-y-auto mt-1">
+                      {filteredCustomers.slice(0, 5).map((customer) => (
+                        <button
+                          key={customer.id}
+                          onClick={() => {
+                            setSelectedCustomer(customer.id);
+                            setCustomerSearchTerm('');
+                          }}
+                          className="w-full text-left p-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
+                        >
+                          <div className="font-medium text-gray-900 text-sm">{customer.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {customer.phone && `Tel: ${customer.phone}`}
+                            {customer.document && ` • Doc: ${customer.document}`}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {selectedCustomer && (
+                  <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <User className="w-4 h-4 text-emerald-600 mr-2" />
+                        <div>
+                          <p className="font-semibold text-emerald-800 text-sm">{customers.find(c => c.id === selectedCustomer)?.name}</p>
+                          <p className="text-emerald-600 text-xs">Cliente selecionado</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedCustomer(null);
+                          setCustomerSearchTerm('');
+                        }}
+                        className="text-emerald-600 hover:text-emerald-800 p-1"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
               
               <div className="space-y-4">
                 <div>

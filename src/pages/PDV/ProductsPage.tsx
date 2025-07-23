@@ -221,7 +221,81 @@ export const ProductsPage: React.FC = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/* Mobile Card Layout */}
+            <div className="block md:hidden">
+              <div className="p-4 space-y-4">
+                {filteredProducts.map((product) => (
+                  <div key={product.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <h3 className="font-bold text-lg text-gray-900 mb-1">{product.name}</h3>
+                        <p className="text-sm text-gray-500">{product.barcode || 'Sem código'}</p>
+                        <p className="text-sm text-blue-600 font-medium">{product.category_name || 'Sem categoria'}</p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleEdit(product)}
+                          className="text-blue-600 hover:text-blue-900 p-2"
+                          title="Editar"
+                        >
+                          <Edit className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(product.id)}
+                          className="text-red-600 hover:text-red-900 p-2"
+                          title="Excluir"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <div className="text-gray-600 text-sm mb-1">Preço de Custo</div>
+                        <div className="font-semibold text-gray-900">R$ {product.cost_price.toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-600 text-sm mb-1">Preço de Venda</div>
+                        <div className="font-semibold text-green-600">R$ {product.sale_price.toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-600 text-sm mb-1">Estoque Atual</div>
+                        <div className="font-semibold">{product.current_stock}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-600 text-sm mb-1">Estoque Mínimo</div>
+                        <div className="font-semibold">{product.min_stock}</div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        product.current_stock <= 0 
+                          ? 'bg-red-100 text-red-800' 
+                          : product.current_stock <= product.min_stock
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {product.current_stock <= 0 ? 'Sem Estoque' : 
+                         product.current_stock <= product.min_stock ? 'Estoque Baixo' : 'OK'}
+                      </span>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        product.is_active 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {product.is_active ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Desktop Table Layout */}
+            <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>

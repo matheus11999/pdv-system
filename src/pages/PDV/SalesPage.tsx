@@ -171,7 +171,7 @@ export const SalesPage: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -252,7 +252,75 @@ export const SalesPage: React.FC = () => {
 
       {/* Sales Table */}
       <Card>
-        <div className="overflow-x-auto">
+        {/* Mobile Card Layout */}
+        <div className="block md:hidden">
+          <div className="p-4 space-y-4">
+            {filteredSales.map((sale) => {
+              const dateTime = formatDateTime(sale.created_at);
+              const itemsCount = sale.sale_items?.length || 0;
+              return (
+                <div key={sale.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="font-bold text-lg text-gray-900">#{sale.sale_number}</div>
+                      <div className="text-sm text-gray-500">{dateTime.date} às {dateTime.time}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-lg text-green-600">R$ {sale.total_amount.toFixed(2)}</div>
+                      {sale.is_credit_sale && (
+                        <div className="text-xs text-orange-600 font-medium">Fiado</div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+                    <div>
+                      <div className="text-gray-600 mb-1">Cliente</div>
+                      <div className="font-medium">{sale.customer?.name || 'Cliente avulso'}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600 mb-1">Itens</div>
+                      <div className="font-medium">{itemsCount} {itemsCount === 1 ? 'item' : 'itens'}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600 mb-1">Pagamento</div>
+                      <div className="font-medium">{getPaymentMethodLabel(sale.payment_method)}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600 mb-1">Vendedor</div>
+                      <div className="font-medium">{sale.cashier?.name || 'N/A'}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(sale.status)}`}>
+                      {getStatusLabel(sale.status)}
+                    </span>
+                    <div className="flex space-x-3">
+                      <button 
+                        className="text-blue-600 hover:text-blue-900 p-2" 
+                        title="Ver detalhes"
+                        onClick={() => setSelectedSale(selectedSale === sale.id ? null : sale.id)}
+                      >
+                        <Eye className="w-5 h-5" />
+                      </button>
+                      <button 
+                        className="text-gray-600 hover:text-gray-900 p-2" 
+                        title="Imprimir cupom"
+                        onClick={() => handlePrintReceipt(sale)}
+                      >
+                        <Printer className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Desktop Table Layout */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
@@ -383,13 +451,13 @@ export const SalesPage: React.FC = () => {
         if (!sale) return null;
         
         return (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <h3 className="text-lg font-semibold mb-4">Detalhes da Venda #{sale.sale_number}</h3>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
+            <Card className="w-full max-w-sm sm:max-w-md lg:max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto mx-2 sm:mx-4">
+              <div className="p-4 sm:p-6">
+                <h3 className="text-lg sm:text-xl font-semibold mb-4">Detalhes da Venda #{sale.sale_number}</h3>
                 
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-gray-600">Cliente</p>
                       <p className="font-medium">{sale.customer?.name || 'Cliente avulso'}</p>

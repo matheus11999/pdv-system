@@ -145,7 +145,7 @@ function Sidebar({ isCollapsed, onToggleCollapse }: { isCollapsed: boolean, onTo
   const sortedMenuItems = menuItems.sort((a, b) => (a.priority || 999) - (b.priority || 999));
 
   return (
-    <div className={`${isCollapsed ? 'w-16' : 'w-64'} bg-white h-full shadow-lg transition-all duration-300 ease-in-out`}>
+    <div className={`${isCollapsed ? 'w-16' : 'w-64'} bg-white h-full shadow-lg transition-all duration-300 ease-in-out ${isCollapsed ? '' : 'lg:relative fixed inset-y-0 left-0 z-50 lg:z-auto'}`}>
       {/* Header com botão de colapsar */}
       <div className="p-4 border-b flex items-center justify-between">
         <div className={`${isCollapsed ? 'hidden' : 'block'}`}>
@@ -508,7 +508,7 @@ function DashboardHome() {
         <p className="text-gray-600">Aqui está um resumo do seu negócio hoje.</p>
       </div>
 
-      <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 ${profile?.role === 'FUNCIONARIO' ? 'lg:grid-cols-2' : 'lg:grid-cols-4'}`}>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-8 ${profile?.role === 'FUNCIONARIO' ? 'lg:grid-cols-2' : 'lg:grid-cols-4'}`}>
         {loading ? (
           Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="bg-white rounded-lg shadow p-6">
@@ -558,7 +558,7 @@ function DashboardHome() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-gray-900 flex items-center">
@@ -790,7 +790,7 @@ export default function Dashboard() {
   const { signOut, profile } = useAuthStore();
   const location = useLocation();
   const isPDVOpen = location.pathname.includes('/pdv');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth < 1024);
 
   const handleSignOut = async () => {
     await signOut();
@@ -804,24 +804,31 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-gray-100">
       {!isPDVOpen && (
-        <Sidebar 
-          isCollapsed={sidebarCollapsed} 
-          onToggleCollapse={toggleSidebar}
-        />
+        <>
+          {/* Mobile overlay */}
+          {!sidebarCollapsed && (
+            <div 
+              className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+              onClick={() => setSidebarCollapsed(true)}
+            />
+          )}
+          <Sidebar 
+            isCollapsed={sidebarCollapsed} 
+            onToggleCollapse={toggleSidebar}
+          />
+        </>
       )}
       <div className="flex-1 flex flex-col">
         {!isPDVOpen && (
           <header className="bg-white shadow h-16 flex items-center justify-between px-6">
             <div className="flex items-center space-x-4">
-              {sidebarCollapsed && (
-                <button
-                  onClick={toggleSidebar}
-                  className="p-2 rounded-md hover:bg-gray-100 transition-colors lg:hidden"
-                  title="Expandir menu"
-                >
-                  <Menu className="w-5 h-5 text-gray-600" />
-                </button>
-              )}
+              <button
+                onClick={toggleSidebar}
+                className="p-2 rounded-md hover:bg-gray-100 transition-colors lg:hidden"
+                title={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+              >
+                <Menu className="w-5 h-5 text-gray-600" />
+              </button>
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">Sistema PDV</h1>
                 <p className="text-sm text-gray-600">Ponto de Venda Integrado</p>
