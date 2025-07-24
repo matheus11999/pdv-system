@@ -10,7 +10,8 @@
     "start": "serve dist -s -l ${PORT:-3000}",
     "lint": "eslint .",
     "preview": "vite preview",
-    "clear-cache": "rm -rf node_modules/.vite && rm -rf dist"
+    "clear-cache": "rm -rf node_modules/.vite && rm -rf dist",
+    "build:production": "NODE_ENV=production vite build"
   },
   "dependencies": {
     "@prisma/client": "^5.10.2",
