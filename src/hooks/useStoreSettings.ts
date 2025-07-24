@@ -28,6 +28,45 @@ export interface StoreSettings {
   sound_effects_enabled?: boolean;
   allow_credit_sales?: boolean;
   updated_at: string;
+  
+  // PWA Settings
+  pwa_name?: string;
+  pwa_short_name?: string;
+  pwa_description?: string;
+  pwa_theme_color?: string;
+  pwa_background_color?: string;
+  pwa_icon_url?: string;
+  
+  // Fiscal Settings
+  enable_nfce?: boolean;
+  fiscal_environment?: string;
+  certificate_path?: string;
+  
+  // Payment Settings
+  mercadopago_token?: string;
+  mercadopago_enabled?: boolean;
+  pix_key?: string;
+  enable_cash_discount?: boolean;
+  cash_discount_percentage?: number;
+  
+  // PDV Settings
+  auto_print_receipt?: boolean;
+  require_customer?: boolean;
+  allow_negative_stock?: boolean;
+  auto_backup_frequency?: string;
+  
+  // Notification Settings
+  low_stock_alerts?: boolean;
+  email_notifications?: boolean;
+  whatsapp_notifications?: boolean;
+  
+  // Interface Settings
+  theme?: string;
+  date_format?: string;
+  
+  // Loyalty Settings
+  loyalty_points_enabled?: boolean;
+  loyalty_points_per_real?: number;
 }
 
 export const useStoreSettings = () => {
@@ -87,7 +126,32 @@ export const useStoreSettings = () => {
         currency: 'BRL',
         timezone: 'America/Sao_Paulo',
         sound_effects_enabled: true,
-        allow_credit_sales: true
+        allow_credit_sales: true,
+        
+        // PWA defaults
+        pwa_name: 'PDV - Sistema de Vendas',
+        pwa_short_name: 'PDV System',
+        pwa_description: 'Sistema completo de Ponto de Venda com controle de estoque',
+        pwa_theme_color: '#2563eb',
+        pwa_background_color: '#ffffff',
+        
+        // System defaults
+        enable_nfce: false,
+        fiscal_environment: 'test',
+        mercadopago_enabled: false,
+        enable_cash_discount: false,
+        cash_discount_percentage: 5.00,
+        auto_print_receipt: false,
+        require_customer: false,
+        allow_negative_stock: false,
+        auto_backup_frequency: 'daily',
+        low_stock_alerts: true,
+        email_notifications: false,
+        whatsapp_notifications: false,
+        theme: 'light',
+        date_format: 'DD/MM/YYYY',
+        loyalty_points_enabled: true,
+        loyalty_points_per_real: 1.00
       };
 
       const { data, error } = await supabase
@@ -111,10 +175,32 @@ export const useStoreSettings = () => {
       setLoading(true);
       setError(null);
 
+      // Campos válidos que existem na tabela store_settings
+      const validFields = [
+        'store_name', 'store_address', 'store_phone', 'store_logo_url',
+        'company_name', 'company_document', 'company_email', 'company_website',
+        'address_street', 'address_number', 'address_complement', 'address_neighborhood',
+        'address_city', 'address_state', 'address_zipcode', 'max_discount_percentage',
+        'allow_discount', 'receipt_header', 'receipt_message', 'receipt_footer',
+        'currency', 'timezone', 'sound_effects_enabled', 'allow_credit_sales',
+        'pwa_name', 'pwa_short_name', 'pwa_description', 'pwa_theme_color',
+        'pwa_background_color', 'pwa_icon_url', 'enable_nfce', 'fiscal_environment',
+        'certificate_path', 'mercadopago_token', 'mercadopago_enabled', 'pix_key',
+        'enable_cash_discount', 'cash_discount_percentage', 'auto_print_receipt',
+        'require_customer', 'allow_negative_stock', 'auto_backup_frequency',
+        'low_stock_alerts', 'email_notifications', 'whatsapp_notifications',
+        'theme', 'date_format', 'loyalty_points_enabled', 'loyalty_points_per_real'
+      ];
+
+      // Filtrar apenas campos válidos
+      const filteredUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([key]) => validFields.includes(key))
+      );
+
       const { data, error } = await supabase
         .from('store_settings')
         .update({
-          ...updates,
+          ...filteredUpdates,
           updated_by: profile.id,
         })
         .eq('id', settings.id)

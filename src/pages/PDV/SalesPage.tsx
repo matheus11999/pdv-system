@@ -4,21 +4,24 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
 import { useSales } from '../../hooks/useSales';
-import { generateReceiptPDF } from '../../utils/receiptPDF';
+import { useStoreSettings } from '../../hooks/useStoreSettings';
+import { generateReceiptPDF, openReceiptInNewTab } from '../../utils/receiptPDF';
 import { supabase } from '../../lib/supabase';
 
 export const SalesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState('today');
   const [selectedSale, setSelectedSale] = useState<string | null>(null);
+  const [selectedSaleItems, setSelectedSaleItems] = useState<any[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
   const [employees, setEmployees] = useState<Array<{id: string, name: string}>>([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(20);
+  const [searchDebounce, setSearchDebounce] = useState('');
 
-  const { sales, loading, error } = useSales();
+  const { sales, loading, error, totalCount, currentPage, pageSize, fetchSales, fetchSaleItems, setCurrentPage } = useSales();
+  const { settings: storeSettings } = useStoreSettings();
 
-  // Load employees for filter
+  // Load employees for filter and initial sales data
   useEffect(() => {
     const fetchEmployees = async () => {
       try {
@@ -36,31 +39,111 @@ export const SalesPage: React.FC = () => {
     };
     
     fetchEmployees();
+    // Load initial sales data
+    fetchSales(1, '', 'all');
   }, []);
 
-  const filteredSales = sales.filter(sale => {
-    // Filter by search term
-    const matchesSearch = sale.sale_number.includes(searchTerm) ||
-      (sale.customer?.name && sale.customer.name.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    // Filter by employee
-    const matchesEmployee = selectedEmployee === 'all' || 
-      sale.cashier_id === selectedEmployee || 
-      sale.user_id === selectedEmployee;
-    
-    return matchesSearch && matchesEmployee;
-  });
-
-  // Cálculos de paginação
-  const totalPages = Math.ceil(filteredSales.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedSales = filteredSales.slice(startIndex, endIndex);
-
-  // Reset page quando filtros mudam
+  // Debounce search term
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchDebounce(searchTerm);
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Fetch sales when filters change
+  useEffect(() => {
+    fetchSales(1, searchDebounce, selectedEmployee);
     setCurrentPage(1);
-  }, [searchTerm, selectedEmployee, selectedPeriod]);
+  }, [searchDebounce, selectedEmployee, selectedPeriod]);
+
+  // Fetch sales when page changes
+  useEffect(() => {
+    if (currentPage > 1) {
+      fetchSales(currentPage, searchDebounce, selectedEmployee);
+    }
+  }, [currentPage]);
+
+  // No more client-side filtering - all done in the backend
+  const filteredSales = sales; // Sales are already filtered by the backend
+  const paginatedSales = sales; // Sales are already paginated by the backend
+  
+  // Cálculos de paginação baseados no backend
+  const totalPages = Math.ceil(totalCount / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalCount);
+
+  // Function to load sale items when opening modal
+  const handleOpenSaleDetails = async (saleId: string) => {
+    setSelectedSale(saleId);
+    setLoadingItems(true);
+    try {
+      const items = await fetchSaleItems(saleId);
+      setSelectedSaleItems(items);
+    } catch (error) {
+      console.error('Error loading sale items:', error);
+      setSelectedSaleItems([]);
+    } finally {
+      setLoadingItems(false);
+    }
+  };
+
+  const handleCloseSaleDetails = () => {
+    setSelectedSale(null);  
+    setSelectedSaleItems([]);
+    setLoadingItems(false);
+  };
+
+  const handleShowReceipt = async (sale: any) => {
+    try {
+      // Load sale items if not loaded
+      let items = [];
+      if (selectedSale === sale.id && selectedSaleItems.length > 0) {
+        items = selectedSaleItems;
+      } else {
+        items = await fetchSaleItems(sale.id);
+      }
+
+      const receiptData = {
+        sale_number: sale.sale_number,
+        customer: {
+          name: sale.customer?.name
+        },
+        payment_method: sale.payment_method,
+        payment_details: sale.payment_details,
+        total_amount: sale.total_amount,
+        change_amount: sale.change_amount || 0,
+        cash_received: sale.payment_details?.cash_received,
+        cashier_name: sale.cashier?.name || 'N/A', // Adicionar vendedor
+        items: items.map((item: any) => ({
+          name: item.product_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_price: item.total_price
+        })),
+        created_at: sale.created_at || sale.sale_date,
+        is_credit_sale: sale.is_credit_sale,
+        due_date: sale.due_date,
+        company: {
+          company_name: storeSettings?.company_name || 'PDV SYSTEM',
+          company_document: storeSettings?.company_document,
+          company_phone: storeSettings?.store_phone,
+          company_email: storeSettings?.company_email,
+          address_street: storeSettings?.address_street,
+          address_city: storeSettings?.address_city,
+          address_state: storeSettings?.address_state,
+          receipt_message: storeSettings?.receipt_message || 'Obrigado pela preferência!',
+          receipt_footer: storeSettings?.receipt_footer || 'Volte sempre!'
+        }
+      };
+      
+      openReceiptInNewTab(receiptData);
+    } catch (error) {
+      console.error('Erro ao exibir comprovante:', error);
+      alert('Erro ao exibir comprovante: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+    }
+  };
 
   const getPaymentMethodLabel = (method: string) => {
     const methods: Record<string, string> = {
@@ -101,48 +184,8 @@ export const SalesPage: React.FC = () => {
     return { date: dateStr, time: timeStr };
   };
 
-  const handlePrintReceipt = (sale: any) => {
-    try {
-      const receiptData = {
-        sale_number: sale.sale_number,
-        customer: {
-          name: sale.customer?.name
-        },
-        payment_method: sale.payment_method,
-        payment_details: sale.payment_details,
-        total_amount: sale.total_amount,
-        change_amount: sale.change_amount || 0,
-        cash_received: sale.payment_details?.cash_received,
-        items: sale.sale_items.map((item: any) => ({
-          name: item.product_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total_price: item.total_price
-        })),
-        created_at: sale.created_at || sale.sale_date,
-        is_credit_sale: sale.is_credit_sale,
-        due_date: sale.due_date,
-        company: {
-          company_name: 'PDV SYSTEM',
-          receipt_message: 'Obrigado pela preferência!',
-          receipt_footer: 'Volte sempre!'
-        }
-      };
-      
-      generateReceiptPDF(receiptData);
-      alert('Comprovante PDF gerado com sucesso!');
-    } catch (error) {
-      console.error('Erro ao gerar comprovante:', error);
-      alert('Erro ao gerar comprovante: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
-    }
-  };
 
-  // Calculate stats from real data
-  const totalSales = filteredSales.length;
-  const completedSales = filteredSales.filter(s => s.status === 'COMPLETED');
-  const totalRevenue = completedSales.reduce((sum, sale) => sum + sale.total_amount, 0);
-  const averageTicket = completedSales.length > 0 ? totalRevenue / completedSales.length : 0;
-  const cancelledSales = filteredSales.filter(s => s.status === 'CANCELLED').length;
+  // Stats are now calculated from the currently loaded page data
 
   if (loading) {
     return (
@@ -183,13 +226,13 @@ export const SalesPage: React.FC = () => {
         </Button>
       </div>
 
-      {/* Stats Cards - Otimizado para mobile */}
+      {/* Stats Cards - Otimizado para mobile (calculado apenas dos dados carregados) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6 mb-6">
         <Card className="p-4 lg:p-6">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
               <p className="text-xs lg:text-sm text-gray-600 truncate">Total</p>
-              <p className="text-lg lg:text-2xl font-bold text-green-600 truncate">R$ {totalRevenue.toFixed(2)}</p>
+              <p className="text-lg lg:text-2xl font-bold text-green-600 truncate">R$ {filteredSales.reduce((sum, sale) => sum + sale.total_amount, 0).toFixed(2)}</p>
             </div>
             <Receipt className="w-6 h-6 lg:w-8 lg:h-8 text-green-500 flex-shrink-0" />
           </div>
@@ -197,8 +240,8 @@ export const SalesPage: React.FC = () => {
         <Card className="p-4 lg:p-6">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-xs lg:text-sm text-gray-600 truncate">Vendas</p>
-              <p className="text-lg lg:text-2xl font-bold text-blue-600 truncate">{totalSales}</p>
+              <p className="text-xs lg:text-sm text-gray-600 truncate">Total Vendas</p>
+              <p className="text-lg lg:text-2xl font-bold text-blue-600 truncate">{totalCount}</p>
             </div>
             <Receipt className="w-6 h-6 lg:w-8 lg:h-8 text-blue-500 flex-shrink-0" />
           </div>
@@ -206,8 +249,8 @@ export const SalesPage: React.FC = () => {
         <Card className="p-4 lg:p-6">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-xs lg:text-sm text-gray-600 truncate">Ticket Médio</p>
-              <p className="text-lg lg:text-2xl font-bold text-purple-600 truncate">R$ {averageTicket.toFixed(2)}</p>
+              <p className="text-xs lg:text-sm text-gray-600 truncate">Página Atual</p>
+              <p className="text-lg lg:text-2xl font-bold text-purple-600 truncate">{currentPage}</p>
             </div>
             <Receipt className="w-6 h-6 lg:w-8 lg:h-8 text-purple-500 flex-shrink-0" />
           </div>
@@ -215,10 +258,10 @@ export const SalesPage: React.FC = () => {
         <Card className="p-4 lg:p-6">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-xs lg:text-sm text-gray-600 truncate">Canceladas</p>
-              <p className="text-lg lg:text-2xl font-bold text-red-600 truncate">{cancelledSales}</p>
+              <p className="text-xs lg:text-sm text-gray-600 truncate">Carregadas</p>
+              <p className="text-lg lg:text-2xl font-bold text-orange-600 truncate">{filteredSales.length}</p>
             </div>
-            <Receipt className="w-6 h-6 lg:w-8 lg:h-8 text-red-500 flex-shrink-0" />
+            <Receipt className="w-6 h-6 lg:w-8 lg:h-8 text-orange-500 flex-shrink-0" />
           </div>
         </Card>
       </div>
@@ -277,12 +320,21 @@ export const SalesPage: React.FC = () => {
 
       {/* Sales Table */}
       <Card>
+        {/* Loading indicator */}
+        {loading && (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
+            <span className="text-gray-600">Carregando vendas...</span>
+          </div>
+        )}
+        
         {/* Mobile Card Layout */}
-        <div className="block md:hidden">
-          <div className="p-4 space-y-4">
-            {paginatedSales.map((sale) => {
+        {!loading && (
+          <div className="block md:hidden">
+            <div className="p-4 space-y-4">
+              {paginatedSales.map((sale) => {
               const dateTime = formatDateTime(sale.created_at);
-              const itemsCount = sale.sale_items?.length || 0;
+              const itemsCount = sale.items_count || 0;
               return (
                 <div key={sale.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
@@ -310,6 +362,9 @@ export const SalesPage: React.FC = () => {
                     <div>
                       <div className="text-gray-600 mb-1">Pagamento</div>
                       <div className="font-medium">{getPaymentMethodLabel(sale.payment_method)}</div>
+                      {sale.payment_method === 'CASH' && sale.change_amount && sale.change_amount > 0 && (
+                        <div className="text-xs text-blue-600 font-medium">Troco: R$ {sale.change_amount.toFixed(2)}</div>
+                      )}
                     </div>
                     <div>
                       <div className="text-gray-600 mb-1">Vendedor</div>
@@ -321,20 +376,20 @@ export const SalesPage: React.FC = () => {
                     <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(sale.status)}`}>
                       {getStatusLabel(sale.status)}
                     </span>
-                    <div className="flex space-x-3">
+                    <div className="flex space-x-2">
                       <button 
                         className="text-blue-600 hover:text-blue-900 p-2" 
                         title="Ver detalhes"
-                        onClick={() => setSelectedSale(selectedSale === sale.id ? null : sale.id)}
+                        onClick={() => handleOpenSaleDetails(sale.id)}
                       >
                         <Eye className="w-5 h-5" />
                       </button>
                       <button 
-                        className="text-gray-600 hover:text-gray-900 p-2" 
-                        title="Imprimir cupom"
-                        onClick={() => handlePrintReceipt(sale)}
+                        className="text-green-600 hover:text-green-900 p-2" 
+                        title="Ver cupom"
+                        onClick={() => handleShowReceipt(sale)}
                       >
-                        <Printer className="w-5 h-5" />
+                        <Receipt className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
@@ -342,10 +397,12 @@ export const SalesPage: React.FC = () => {
               );
             })}
           </div>
-        </div>
+          </div>
+        )}
 
         {/* Desktop Table Layout */}
-        <div className="hidden md:block overflow-x-auto">
+        {!loading && (
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
@@ -378,7 +435,7 @@ export const SalesPage: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {paginatedSales.map((sale) => {
                 const dateTime = formatDateTime(sale.created_at);
-                const itemsCount = sale.sale_items?.length || 0;
+                const itemsCount = sale.items_count || 0;
                 return (
                   <tr key={sale.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -419,6 +476,9 @@ export const SalesPage: React.FC = () => {
                       <div className="text-sm text-gray-900">
                         {getPaymentMethodLabel(sale.payment_method)}
                       </div>
+                      {sale.payment_method === 'CASH' && sale.change_amount && sale.change_amount > 0 && (
+                        <div className="text-xs text-blue-600">Troco: R$ {sale.change_amount.toFixed(2)}</div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
@@ -442,16 +502,16 @@ export const SalesPage: React.FC = () => {
                         <button 
                           className="text-blue-600 hover:text-blue-900" 
                           title="Ver detalhes"
-                          onClick={() => setSelectedSale(selectedSale === sale.id ? null : sale.id)}
+                          onClick={() => handleOpenSaleDetails(sale.id)}
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                         <button 
-                          className="text-gray-600 hover:text-gray-900" 
-                          title="Imprimir cupom"
-                          onClick={() => handlePrintReceipt(sale)}
+                          className="text-green-600 hover:text-green-900" 
+                          title="Ver cupom"
+                          onClick={() => handleShowReceipt(sale)}
                         >
-                          <Printer className="w-4 h-4" />
+                          <Receipt className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
@@ -460,9 +520,10 @@ export const SalesPage: React.FC = () => {
               })}
             </tbody>
           </table>
-        </div>
+          </div>
+        )}
 
-        {paginatedSales.length === 0 && filteredSales.length === 0 && (
+        {sales.length === 0 && !loading && (
           <div className="text-center py-12">
             <Receipt className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">Nenhuma venda encontrada</p>
@@ -470,21 +531,21 @@ export const SalesPage: React.FC = () => {
         )}
       </Card>
 
-      {/* Controles de Paginação */}
+      {/* Controles de Paginação Otimizados */}
       {totalPages > 1 && (
         <Card className="p-4 mt-4">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="text-sm text-gray-600">
-              Mostrando {startIndex + 1} - {Math.min(endIndex, filteredSales.length)} de {filteredSales.length} vendas
+              Mostrando {startIndex + 1} - {endIndex} de {totalCount} vendas
             </div>
             
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setCurrentPage(Math.max(currentPage - 1, 1))}
-                disabled={currentPage === 1}
+                disabled={currentPage === 1 || loading}
                 className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Anterior
+                {loading ? '...' : 'Anterior'}
               </button>
               
               <div className="flex space-x-1">
@@ -496,7 +557,8 @@ export const SalesPage: React.FC = () => {
                     <button
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
-                      className={`px-3 py-2 text-sm border border-gray-300 rounded-md ${
+                      disabled={loading}
+                      className={`px-3 py-2 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed ${
                         currentPage === pageNum
                           ? 'bg-blue-500 text-white border-blue-500'
                           : 'hover:bg-gray-50'
@@ -510,10 +572,10 @@ export const SalesPage: React.FC = () => {
               
               <button
                 onClick={() => setCurrentPage(Math.min(currentPage + 1, totalPages))}
-                disabled={currentPage === totalPages}
+                disabled={currentPage === totalPages || loading}
                 className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Próximo
+                {loading ? '...' : 'Próximo'}
               </button>
             </div>
           </div>
@@ -522,7 +584,7 @@ export const SalesPage: React.FC = () => {
 
       {/* Sale Details Modal */}
       {selectedSale && (() => {
-        const sale = filteredSales.find(s => s.id === selectedSale);
+        const sale = sales.find(s => s.id === selectedSale);
         if (!sale) return null;
         
         return (
@@ -583,9 +645,14 @@ export const SalesPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {sale.sale_items && sale.sale_items.length > 0 && (
-                    <div>
-                      <p className="text-sm text-gray-600 mb-2">Itens da Venda</p>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Itens da Venda</p>
+                    {loadingItems ? (
+                      <div className="flex justify-center items-center py-8">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-2"></div>
+                        <span className="text-gray-600">Carregando itens...</span>
+                      </div>
+                    ) : selectedSaleItems.length > 0 ? (
                       <div className="border rounded-md overflow-hidden">
                         <table className="w-full text-sm">
                           <thead className="bg-gray-50">
@@ -597,7 +664,7 @@ export const SalesPage: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
-                            {sale.sale_items.map((item, index) => (
+                            {selectedSaleItems.map((item, index) => (
                               <tr key={index}>
                                 <td className="px-3 py-2">{item.product_name}</td>
                                 <td className="px-3 py-2 text-center">{item.quantity}</td>
@@ -608,12 +675,14 @@ export const SalesPage: React.FC = () => {
                           </tbody>
                         </table>
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <p className="text-gray-500 py-4 text-center">Nenhum item encontrado para esta venda</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex justify-end pt-4 border-t">
-                  <Button variant="secondary" onClick={() => setSelectedSale(null)}>
+                  <Button variant="secondary" onClick={handleCloseSaleDetails}>
                     Fechar
                   </Button>
                 </div>

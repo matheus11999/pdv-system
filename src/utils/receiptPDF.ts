@@ -36,6 +36,7 @@ interface ReceiptData {
   discount_amount?: number;
   change_amount?: number;
   cash_received?: number;
+  cashier_name?: string;
   items: ReceiptItem[];
   created_at: string;
   is_credit_sale?: boolean;
@@ -495,6 +496,7 @@ export const generateReceiptHTML = (receiptData: ReceiptData): string => {
                 `<p style="margin: 5px 0;">Valor Recebido: R$ ${receiptData.cash_received.toFixed(2)}</p>` : ''}
             ${receiptData.payment_method === 'CASH' && receiptData.change_amount && receiptData.change_amount > 0 && !receiptData.is_credit_sale ? 
                 `<p style="margin: 5px 0; font-weight: bold;">Troco: R$ ${receiptData.change_amount.toFixed(2)}</p>` : ''}
+            ${receiptData.cashier_name ? `<p style="margin: 5px 0;">Vendedor: ${receiptData.cashier_name}</p>` : ''}
         </div>
 
         ${receiptData.is_credit_sale ? `

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
+import { usePWAConfig } from './hooks/usePWAConfig';
 import Login from './pages/Login';
 import { Setup } from './pages/Setup';
 import Dashboard from './pages/Dashboard';
@@ -9,6 +10,9 @@ import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 
 function App() {
   const { loading, initialize, user, profile, isSetupNeeded } = useAuthStore();
+  
+  // Initialize PWA configuration with store settings
+  usePWAConfig();
 
   useEffect(() => {
     initialize();

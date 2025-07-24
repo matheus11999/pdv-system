@@ -154,11 +154,14 @@ export const CustomersPage: React.FC = () => {
 
       if (paymentError) throw paymentError;
 
-      // Update customer debt balance
+      // Update customer debt balance and last payment date
       const newDebtBalance = Math.max(0, (selectedCustomer.debt_balance || 0) - amount);
       const { error: updateError } = await supabase
         .from('customers')
-        .update({ debt_balance: newDebtBalance })
+        .update({ 
+          debt_balance: newDebtBalance,
+          last_payment_date: new Date().toISOString()
+        })
         .eq('id', selectedCustomer.id);
 
       if (updateError) throw updateError;

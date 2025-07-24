@@ -49,6 +49,7 @@ export interface Sale {
     role: string;
   };
   sale_items: SaleItem[];
+  items_count?: number; // Count of items for display without loading all items
 }
 
 export interface SaleInput {
@@ -71,8 +72,11 @@ export function useSales() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(20);
 
-  const fetchSales = async () => {
+  const fetchSales = async (page = 1, searchTerm = '', employeeFilter = 'all', filters = {}) => {
     setLoading(true);
     setError(null);
     try {
@@ -88,8 +92,15 @@ export function useSales() {
         
       if (profileError || !profile) throw new Error('Profile do usuário não encontrado');
 
-      // Build query - if funcionario, only show their sales
-      let query = supabase
+      // Calculate offset for pagination
+      const offset = (page - 1) * pageSize;
+
+      // Build base query
+      let countQuery = supabase
+        .from('sales')
+        .select('id', { count: 'exact', head: true });
+      
+      let dataQuery = supabase
         .from('sales')
         .select(`
           id, 
@@ -113,18 +124,38 @@ export function useSales() {
           updated_at
         `)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .range(offset, offset + pageSize - 1);
 
-      // If funcionario, filter by their user_id
+      // Apply user role filter
       if (profile.role === 'FUNCIONARIO') {
-        query = query.eq('user_id', profile.id);
+        countQuery = countQuery.eq('user_id', profile.id);
+        dataQuery = dataQuery.eq('user_id', profile.id);
       }
 
-      const { data: salesData, error: salesError } = await query;
+      // Apply employee filter for admin users
+      if (profile.role === 'ADMIN' && employeeFilter !== 'all') {
+        countQuery = countQuery.eq('user_id', employeeFilter);
+        dataQuery = dataQuery.eq('user_id', employeeFilter);
+      }
+
+      // Apply search filter if provided
+      if (searchTerm.trim()) {
+        countQuery = countQuery.ilike('sale_number', `%${searchTerm}%`);
+        dataQuery = dataQuery.ilike('sale_number', `%${searchTerm}%`);
+      }
+
+      // Execute queries
+      const [{ count }, { data: salesData, error: salesError }] = await Promise.all([
+        countQuery,
+        dataQuery
+      ]);
 
       if (salesError) throw salesError;
 
-      // Then fetch customers separately to avoid complex joins
+      setTotalCount(count || 0);
+      setCurrentPage(page);
+
+      // Fetch customers and cashiers separately for better performance
       const salesWithCustomers = await Promise.all(
         (salesData || []).map(async (sale) => {
           let customer = null;
@@ -148,17 +179,18 @@ export function useSales() {
             cashier = cashierData;
           }
 
-          // Fetch sale items separately
-          const { data: saleItems } = await supabase
+          // Fetch item count for display
+          const { count: itemCount } = await supabase
             .from('sale_items')
-            .select('id, product_id, product_name, quantity, unit_price, total_price')
+            .select('*', { count: 'exact', head: true })
             .eq('sale_id', sale.id);
 
           return {
             ...sale,
             customer,
             cashier,
-            sale_items: saleItems || []
+            sale_items: [], // Will be loaded separately when needed
+            items_count: itemCount || 0 // Add item count for display
           };
         })
       );
@@ -173,6 +205,7 @@ export function useSales() {
   };
 
   const createSale = async (saleData: SaleInput) => {
+    setLoading(true);
     try {
       // Get current user for cashier_id
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -253,6 +286,8 @@ export function useSales() {
       return sale;
     } catch (err) {
       throw err instanceof Error ? err : new Error('Erro ao criar venda');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -267,6 +302,21 @@ export function useSales() {
       await fetchSales();
     } catch (err) {
       throw err instanceof Error ? err : new Error('Erro ao cancelar venda');
+    }
+  };
+
+  const fetchSaleItems = async (saleId: string) => {
+    try {
+      const { data: saleItems, error } = await supabase
+        .from('sale_items')
+        .select('id, product_id, product_name, quantity, unit_price, total_price')
+        .eq('sale_id', saleId);
+
+      if (error) throw error;
+      return saleItems || [];
+    } catch (err) {
+      console.error('Error fetching sale items:', err);
+      return [];
     }
   };
 
@@ -295,17 +345,23 @@ export function useSales() {
     }
   };
 
-  useEffect(() => {
-    fetchSales();
-  }, []);
+  // Don't auto-fetch on mount - let the component control when to fetch
+  // useEffect(() => {
+  //   fetchSales();
+  // }, []);
 
   return {
     sales,
     loading,
     error,
+    totalCount,
+    currentPage,
+    pageSize,
     fetchSales,
+    fetchSaleItems,
     createSale,
     cancelSale,
     getTodaysSales,
+    setCurrentPage,
   };
 }

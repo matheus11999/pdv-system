@@ -244,6 +244,7 @@ interface DashboardStats {
 }
 
 interface RecentSale {
+  id: string;
   sale_number: string;
   customer_name: string | null;
   cashier_name: string | null;
@@ -283,26 +284,32 @@ function DashboardHome() {
   const [selectedSale, setSelectedSale] = useState<any>(null);
   const [showSaleDetails, setShowSaleDetails] = useState(false);
 
-  const fetchSaleDetails = useCallback(async (saleNumber: string) => {
+  const fetchSaleDetails = useCallback(async (saleId: string, saleNumber: string) => {
     try {
-      const { data, error } = await supabase
+      // First fetch the sale data
+      const { data: saleData, error: saleError } = await supabase
         .from('sales')
         .select(`
           *,
-          customer:customers(name, cpf, cnpj),
-          sale_items(
-            id,
-            product_name,
-            quantity,
-            unit_price,
-            total_price
-          )
+          customer:customers(name, cpf, cnpj)
         `)
         .eq('sale_number', saleNumber)
         .single();
 
-      if (error) throw error;
-      setSelectedSale(data);
+      if (saleError) throw saleError;
+
+      // Then fetch sale items separately
+      const { data: saleItems, error: itemsError } = await supabase
+        .from('sale_items')
+        .select('id, product_name, quantity, unit_price, total_price')
+        .eq('sale_id', saleId);
+
+      if (itemsError) throw itemsError;
+
+      setSelectedSale({
+        ...saleData,
+        sale_items: saleItems || []
+      });
       setShowSaleDetails(true);
     } catch (error) {
       console.error('Erro ao buscar detalhes da venda:', error);
@@ -358,6 +365,7 @@ function DashboardHome() {
       let salesQuery = supabase
         .from('sales')
         .select(`
+          id,
           sale_number,
           total_amount,
           created_at,
@@ -460,6 +468,7 @@ function DashboardHome() {
         const salesWithCashiers = salesResult.data.map(sale => {
           const cashier = cashiersMap.get(sale.cashier_id);
           return {
+            id: sale.id,
             sale_number: sale.sale_number,
             customer_name: sale.customers?.name || null,
             cashier_name: cashier?.name || null,
@@ -703,7 +712,7 @@ function DashboardHome() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        fetchSaleDetails(sale.sale_number);
+                        fetchSaleDetails(sale.id, sale.sale_number);
                       }}
                       className="flex items-center px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-full transition-colors"
                     >
